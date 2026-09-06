@@ -60,11 +60,18 @@ P2 projectSafe(const Vec3& p, const Camera& cam) {
 void triSafe(const P2& a, const P2& b, const P2& c, unsigned color) {
     if (!a.ok || !b.ok || !c.ok) return;
 
-    vita2d_color_vertex v[3] = {
-        {a.x, a.y, 0.5f, color},
-        {b.x, b.y, 0.5f, color},
-        {c.x, c.y, 0.5f, color}
-    };
+    // IMPORTANT: vita2d_draw_array() expects GPU-readable vertex memory.
+    // Allocate from Vita2D's per-frame GPU pool instead of the CPU stack.
+    vita2d_color_vertex* v =
+        (vita2d_color_vertex*)vita2d_pool_memalign(
+            3 * sizeof(vita2d_color_vertex),
+            sizeof(vita2d_color_vertex));
+
+    if (!v) return;
+
+    v[0] = {a.x, a.y, 0.5f, color};
+    v[1] = {b.x, b.y, 0.5f, color};
+    v[2] = {c.x, c.y, 0.5f, color};
 
     vita2d_draw_array(SCE_GXM_PRIMITIVE_TRIANGLES, v, 3);
 }
