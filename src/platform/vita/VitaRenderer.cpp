@@ -112,8 +112,12 @@ void facadeWindows(const Vec3& c,float sx,float sy,float sz,const Camera& cam,un
 
 void building(const Vec3& c,float sx,float sy,float sz,const Camera& cam,unsigned seed,RegionType region) {
     static const unsigned palette[] = {
-        RGBA8(124,126,128,255), RGBA8(148,139,127,255), RGBA8(112,123,133,255),
-        RGBA8(153,151,143,255), RGBA8(126,113,105,255), RGBA8(138,145,150,255)
+        static_cast<unsigned>(RGBA8(124,126,128,255)),
+        static_cast<unsigned>(RGBA8(148,139,127,255)),
+        static_cast<unsigned>(RGBA8(112,123,133,255)),
+        static_cast<unsigned>(RGBA8(153,151,143,255)),
+        static_cast<unsigned>(RGBA8(126,113,105,255)),
+        static_cast<unsigned>(RGBA8(138,145,150,255))
     };
     unsigned face=palette[seed%6];
     bool downtown=region==RegionType::Downtown;
@@ -283,9 +287,9 @@ void VitaRenderer::draw(const Player& player,const Vehicle& car,const Camera& ca
     vehicle(car,camera);
     if(!player.inVehicle && camera.mode!=CameraMode::FirstPerson) person(player,camera);
 
-    vita2d_draw_fill_rectangle(18,18,300,62,RGBA8(0,0,0,165));
-    vita2d_draw_fill_rectangle(29,58,210,8,RGBA8(30,30,30,220));
-    vita2d_draw_fill_rectangle(29,58,210*(1.0f-wanted.heat/100.0f),8,RGBA8(88,210,112,255));
+    vita2d_draw_rectangle(18,18,300,62,RGBA8(0,0,0,165));
+    vita2d_draw_rectangle(29,58,210,8,RGBA8(30,30,30,220));
+    vita2d_draw_rectangle(29,58,210*(1.0f-wanted.heat/100.0f),8,RGBA8(88,210,112,255));
     for(int i=0;i<wanted.level;i++) vita2d_draw_fill_circle(264+i*10,39,4,RGBA8(255,210,60,255));
     vita2d_draw_line(476,272,484,272,RGBA8(255,255,255,160));
     vita2d_draw_line(480,268,480,276,RGBA8(255,255,255,160));
