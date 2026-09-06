@@ -26,15 +26,15 @@ InputState VitaInput::poll(const GameSettings& settings,bool inVehicle) {
 
     InputState in{};
     // M67: standard PS Vita twin-stick layout.
-    // Left stick = movement/steering. Right stick = camera/look.
-    in.moveX=axis(pad.lx,settings.stickDeadzone);
-    in.moveY=-axis(pad.ly,settings.stickDeadzone);
+    // M70 physical PS Vita mapping: left stick up/down = forward/back, left/right = strafe. Right stick = camera/look.
+    in.moveX=-axis(pad.ly,settings.stickDeadzone);
+    in.moveY=axis(pad.lx,settings.stickDeadzone);
 
-    // Horizontal camera direction corrected for the game's camera convention:
+    // M68 physical Vita correction: horizontal right-stick direction.
     // push right -> look right, push left -> look left.
-    in.lookX=-axis(pad.rx,settings.stickDeadzone)*settings.lookSensitivity*(settings.invertCameraX?-1.0f:1.0f);
+    in.lookX=axis(pad.rx,settings.stickDeadzone)*settings.lookSensitivity*(settings.invertCameraX?-1.0f:1.0f);
 
-    // Vita Y axis grows downward, so negate it for normal camera controls:
+    // M70 physical Vita correction: invert only right-stick vertical; horizontal already correct.
     // push up -> look up, push down -> look down.
     in.lookY=-axis(pad.ry,settings.stickDeadzone)*settings.lookSensitivity*(settings.invertCameraY?-1.0f:1.0f);
 
