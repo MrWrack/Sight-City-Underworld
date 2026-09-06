@@ -79,7 +79,6 @@ if(BUILD_VITA)
         SceKernelDmacMgr_stub
 
         SceCommonDialog_stub
-        SceSharedFb_stub
         SceAppMgr_stub
         SceSysmem_stub
         SceKernelThreadMgr_stub
