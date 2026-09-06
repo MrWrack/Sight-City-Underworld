@@ -18,7 +18,7 @@ void Player::update(const InputState& in,float dt){
     if(inVehicle){ moveState_=PlayerMoveState::Driving; return; }
     Vec3 wish{in.moveX,0,in.moveY}; float mag=length(wish); if(mag>1.0f) wish=normalize(wish);
     float speed=0.0f; if(mag>0.05f) speed=in.stealth()?2.0f:(in.sprint()?6.5f:(mag>0.65f?4.0f:2.7f));
-    velocity.x=wish.x*speed; velocity.z=wish.z*speed; if(mag>0.05f) heading=std::atan2(wish.x,wish.z);
+    velocity.x=wish.x*speed; velocity.z=wish.z*speed;
     if(grounded_ && in.jump()){ grounded_=false; verticalVelocity_=5.8f; fallStartY_=position.y; }
     if(!grounded_){ verticalVelocity_-=15.5f*dt; position.y+=verticalVelocity_*dt; if(position.y<=0.0f){ position.y=0.0f; verticalVelocity_=0.0f; grounded_=true; } }
     position.x+=velocity.x*dt; position.z+=velocity.z*dt; updateState(in,mag,speed);
@@ -29,7 +29,7 @@ void Player::updateWorld(const InputState& in,float dt,const EnvironmentSystem& 
     if(inVehicle){ moveState_=PlayerMoveState::Driving; return; }
     Vec3 wish{in.moveX,0,in.moveY}; float mag=length(wish); if(mag>1.0f) wish=normalize(wish);
     float speed=0.0f; if(mag>0.05f) speed=in.stealth()?2.0f:(in.sprint()?6.5f:(mag>0.65f?4.0f:2.7f));
-    velocity.x=wish.x*speed; velocity.z=wish.z*speed; if(mag>0.05f) heading=std::atan2(wish.x,wish.z);
+    velocity.x=wish.x*speed; velocity.z=wish.z*speed;
 
     const float ground=collisions.groundHeight(position.x,position.z,environment);
     if(grounded_) position.y=ground;
