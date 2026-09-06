@@ -70,12 +70,23 @@ if(BUILD_VITA)
     target_compile_options(city_limits_vita PRIVATE -O2 -ffast-math)
     target_link_libraries(city_limits_vita
         vita2d
+
         SceDisplay_stub
         SceGxm_stub
         SceCtrl_stub
         SceTouch_stub
         SceSysmodule_stub
         SceKernelDmacMgr_stub
+
+        SceCommonDialog_stub
+        SceSharedFb_stub
+        SceAppMgr_stub
+        SceSysmem_stub
+        SceKernelThreadMgr_stub
+        SceLibKernel_stub
+        ScePgf_stub
+        ScePvf_stub
+
         m
     )
 
