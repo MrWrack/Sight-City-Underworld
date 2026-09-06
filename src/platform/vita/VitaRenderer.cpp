@@ -285,8 +285,7 @@ bool VitaRenderer::init() {
 }
 
 void VitaRenderer::shutdown() {
-    // Finish queued GPU work before releasing Vita2D/GXM resources.
-    sceGxmFinish();
+    // vita2d_fini() handles Vita2D/GXM shutdown for this renderer.
     vita2d_fini();
 }
 
