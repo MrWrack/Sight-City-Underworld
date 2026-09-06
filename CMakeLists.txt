@@ -91,7 +91,7 @@ if(BUILD_VITA)
 
     set(VITA_APP_NAME "Sight City: Underworld")
     set(VITA_TITLEID "SCUW00001")
-    set(VITA_VERSION "00.61")
+    set(VITA_VERSION "00.62")
     vita_create_self(city_limits_vita.self city_limits_vita UNSAFE)
     vita_create_vpk(sight_city_underworld.vpk ${VITA_TITLEID} city_limits_vita.self
         VERSION ${VITA_VERSION}
