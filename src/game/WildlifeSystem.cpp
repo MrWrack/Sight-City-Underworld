@@ -1,0 +1,12 @@
+#include "game/WildlifeSystem.h"
+#include <cmath>
+#include <algorithm>
+int WildlifeSystem::targetFor(RegionType r) const { switch(r){case RegionType::Countryside:return 12;case RegionType::Mountain:return 10;case RegionType::Coast:return 8;case RegionType::Suburb:return 4;default:return 2;} }
+AnimalSpecies WildlifeSystem::speciesFor(RegionType r,int s) const { if(r==RegionType::Coast)return (s%2)?AnimalSpecies::Seagull:AnimalSpecies::Bird; if(r==RegionType::Mountain)return (s%3)?AnimalSpecies::Deer:AnimalSpecies::Fox; if(r==RegionType::Countryside){AnimalSpecies a[]={AnimalSpecies::Deer,AnimalSpecies::Hare,AnimalSpecies::Fox,AnimalSpecies::Boar,AnimalSpecies::Bird};return a[s%5];} return (s%2)?AnimalSpecies::Bird:AnimalSpecies::Hare; }
+void WildlifeSystem::update(const Vec3&p,float dt,RegionType region,bool danger){
+ int target=targetFor(region); target=std::min(target,vitaBudget());
+ while((int)active.size()<target){int i=(int)active.size();float ox=(float)(((i*73+(int)tick)%181)-90);float oz=(float)(((i*47+(int)tick*3)%181)-90);Animal a;a.species=speciesFor(region,i+(int)tick);a.position={p.x+ox,0,p.z+oz};a.heading=(float)((i*67)%628)*0.01f;a.speed=0.7f+(i%4)*0.25f;a.stateTimer=2.0f+(i%5);active.push_back(a);} if((int)active.size()>target)active.resize(target);
+ ++tick;
+ for(size_t i=0;i<active.size();++i){auto&a=active[i];float dx=a.position.x-p.x,dz=a.position.z-p.z,d=std::sqrt(dx*dx+dz*dz);a.stateTimer-=dt;if((danger&&d<45)||d<8){a.state=AnimalState::Fleeing;a.heading=std::atan2(dx,dz);a.stateTimer=4;}else if(a.stateTimer<=0){int c=((int)i+(int)tick)%7;if(c==0){a.state=AnimalState::Resting;a.stateTimer=3;}else if(c==1){a.state=AnimalState::Feeding;a.stateTimer=4;}else{a.state=AnimalState::Roaming;a.heading+=((int)(tick+i)%3-1)*0.6f;a.stateTimer=3;}}float s=(a.state==AnimalState::Resting||a.state==AnimalState::Feeding)?0:(a.state==AnimalState::Fleeing?4.8f:a.speed);a.position.x+=std::sin(a.heading)*s*dt;a.position.z+=std::cos(a.heading)*s*dt;if(std::fabs(a.position.x-p.x)>180||std::fabs(a.position.z-p.z)>180){a.position={p.x+70+(float)(i*9),0,p.z-60+(float)(i*11)};a.state=AnimalState::Roaming;}}
+}
+void WildlifeSystem::reactToVehicle(const Vec3&v,float speed,float dt){(void)dt;for(auto&a:active){float dx=a.position.x-v.x,dz=a.position.z-v.z,d2=dx*dx+dz*dz;if(d2<625&&speed>3){a.state=AnimalState::Fleeing;a.heading=std::atan2(dx,dz);a.stateTimer=5;}if(d2<2.25f&&speed>6)a.alive=false;}}

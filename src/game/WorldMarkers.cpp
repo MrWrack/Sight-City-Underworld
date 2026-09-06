@@ -1,0 +1,5 @@
+#include "WorldMarkers.h"
+WorldMarkers::WorldMarkers(){markers={{1,MarkerType::SmallStore,{150,0,80},true},{2,MarkerType::GunStore,{900,0,-500},true},{3,MarkerType::Supermarket,{-650,0,350},true},{4,MarkerType::Mall,{1200,0,900},true},{5,MarkerType::PropertyForSale,{420,0,620},true},{6,MarkerType::Garage,{-300,0,700},true},{7,MarkerType::Bank,{720,0,140},true},{8,MarkerType::BusinessForSale,{-900,0,-350},true},{9,MarkerType::VehicleShop,{1050,0,-200},true,true,false,false,true,true},{10,MarkerType::Heist,{500,0,-800},true,true,false,false,true,false},{11,MarkerType::Mission,{-450,0,1000},true,true,false,false,false,true}};}
+bool WorldMarkers::shouldPulse(uint32_t id)const{for(const auto&m:markers)if(m.id==id)return m.isNew&&!m.viewed&&!m.visited;return false;}
+bool WorldMarkers::acknowledge(uint32_t id){for(auto&m:markers)if(m.id==id){m.viewed=true;m.isNew=false;return true;}return false;}
+bool WorldMarkers::visit(uint32_t id){for(auto&m:markers)if(m.id==id){m.visited=true;m.viewed=true;m.isNew=false;return true;}return false;}
