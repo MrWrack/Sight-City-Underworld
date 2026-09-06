@@ -24,16 +24,27 @@ P2 project(const Vec3& p, const Camera& cam) {
     float cx = dot3(rel, r);
     float cy = dot3(rel, u);
     float cz = dot3(rel, f);
-    if (cz < 0.20f) return {0,0,cz,false};
-    return {W*0.5f + cx * FOCAL / cz, H*0.52f - cy * FOCAL / cz, cz, true};
+    if (!std::isfinite(cx) || !std::isfinite(cy) || !std::isfinite(cz) || cz < 0.20f)
+        return {0,0,cz,false};
+
+    float sx = W*0.5f + cx * FOCAL / cz;
+    float sy = H*0.52f - cy * FOCAL / cz;
+
+    // Reject pathological projected coordinates before they reach GXM.
+    if (!std::isfinite(sx) || !std::isfinite(sy) ||
+        sx < -4096.0f || sx > 4096.0f ||
+        sy < -4096.0f || sy > 4096.0f)
+        return {0,0,cz,false};
+
+    return {sx, sy, cz, true};
 }
 
 void tri(const P2& a,const P2& b,const P2& c,unsigned int color) {
     if(!a.ok || !b.ok || !c.ok) return;
-    vita2d_color_vertex v[3] = {
-        {a.x,a.y,0.5f,color}, {b.x,b.y,0.5f,color}, {c.x,c.y,0.5f,color}
-    };
-    vita2d_draw_array(SCE_GXM_PRIMITIVE_TRIANGLES, v, 3);
+
+    // GPU-safe Vita2D path: do not pass a temporary stack vertex array to GXM.
+    // vita2d_draw_triangle() uses Vita2D's managed vertex pool.
+    vita2d_draw_triangle(a.x, a.y, b.x, b.y, c.x, c.y, color);
 }
 
 void quad(const Vec3& a,const Vec3& b,const Vec3& c,const Vec3& d,const Camera& cam,unsigned int color) {
@@ -273,7 +284,11 @@ bool VitaRenderer::init() {
     return true;
 }
 
-void VitaRenderer::shutdown() { vita2d_fini(); }
+void VitaRenderer::shutdown() {
+    // Finish queued GPU work before releasing Vita2D/GXM resources.
+    sceGxmFinish();
+    vita2d_fini();
+}
 
 void VitaRenderer::draw(const Player& player,const Vehicle& car,const Camera& camera,
                         const World& world,const WantedSystem& wanted,
@@ -281,6 +296,8 @@ void VitaRenderer::draw(const Player& player,const Vehicle& car,const Camera& ca
     vita2d_start_drawing();
     vita2d_clear_screen();
 
+    // M63 physical-Vita stability gate:
+    // render the streamed world only after the safe primitive path is active.
     drawStreamingCity(camera, world);
     for(const auto& t: traffic.cars) trafficVehicle(t,camera);
     for(const auto& n: npcs.npcs) pedestrian(n,camera);

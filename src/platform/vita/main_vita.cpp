@@ -36,7 +36,7 @@ int main() {
     EnvironmentSystem environment;
     SightCityMap sightMap;
     WorldCollisionSystem collisions;
-    world.radius=2;
+    world.radius=1; // M63: conservative physical-Vita streaming radius.
     WantedSystem wanted;
     TrafficSystem traffic;
     NPCSystem npcs;
