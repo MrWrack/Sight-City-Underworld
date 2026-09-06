@@ -3,21 +3,30 @@ name: PS Vita VPK Build
 on:
   workflow_dispatch:
   push:
-    branches: [ main, master ]
+    branches:
+      - main
+      - master
 
 jobs:
   vita:
     runs-on: ubuntu-latest
+
     container:
       image: vitasdk/vitasdk:latest
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Verify LiveArea package
         run: python3 scripts/verify_vita_package.py
+
       - name: Build VPK
         env:
           VITASDK: /usr/local/vitasdk
-        run: ./scripts/build_vita.sh
+        run: |
+          chmod +x ./scripts/build_vita.sh
+          bash ./scripts/build_vita.sh
+
       - name: Upload VPK
         uses: actions/upload-artifact@v4
         with:
