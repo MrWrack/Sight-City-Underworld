@@ -1,0 +1,9 @@
+# M61 compatibility note
+# The Vita build is now configured through the main CMakeLists.txt.
+# Use:
+#   cmake -S . -B build-vita \
+#     -DCMAKE_TOOLCHAIN_FILE="$VITASDK/share/vita.toolchain.cmake" \
+#     -DBUILD_VITA=ON
+#   cmake --build build-vita -j2
+#
+# This file is intentionally not used as a CMake cache preload script anymore.

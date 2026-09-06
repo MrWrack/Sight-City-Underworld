@@ -1,0 +1,17 @@
+Sight City: Underworld — M61 Vita build status
+
+Package verification: PASS
+Desktop smoke test: PASS
+Desktop smoke output: Sight City: Underworld M61 OK=1 StoryComplete=1 FreeRoam=1 Checkpoint=1 Vita30FPS=30 WildlifeCap=12 Online=PAUSED HardwareTestRequired=1
+VitaSDK available in this workspace: NO
+Physical PS Vita hardware test: NOT YET PERFORMED
+Online: PAUSED / HARD-DISABLED pending successful physical Story test
+
+To build the VPK:
+  ./scripts/build_vita.sh
+or with Docker:
+  ./scripts/build_vita_docker.sh
+or push to GitHub and run .github/workflows/vita-build.yml
+
+Expected VPK output:
+  build-vita/sight_city_underworld.vpk
