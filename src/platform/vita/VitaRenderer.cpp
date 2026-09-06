@@ -42,9 +42,14 @@ P2 project(const Vec3& p, const Camera& cam) {
 void tri(const P2& a,const P2& b,const P2& c,unsigned int color) {
     if(!a.ok || !b.ok || !c.ok) return;
 
-    // GPU-safe Vita2D path: do not pass a temporary stack vertex array to GXM.
-    // vita2d_draw_triangle() uses Vita2D's managed vertex pool.
-    vita2d_draw_triangle(a.x, a.y, b.x, b.y, c.x, c.y, color);
+    // Vita2D in the current VitaSDK image has no vita2d_draw_triangle().
+    // Submit through Vita2D's supported color-vertex array API instead.
+    vita2d_color_vertex v[3] = {
+        {a.x, a.y, 0.5f, color},
+        {b.x, b.y, 0.5f, color},
+        {c.x, c.y, 0.5f, color}
+    };
+    vita2d_draw_array(SCE_GXM_PRIMITIVE_TRIANGLES, v, 3);
 }
 
 void quad(const Vec3& a,const Vec3& b,const Vec3& c,const Vec3& d,const Camera& cam,unsigned int color) {
