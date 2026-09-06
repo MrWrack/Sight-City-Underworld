@@ -14,6 +14,7 @@
 #include <psp2/kernel/processmgr.h>
 #include <psp2/kernel/threadmgr.h>
 #include <psp2/io/fcntl.h>
+#include <psp2/io/stat.h>
 #include <cmath>
 
 static float distXZ(const Vec3& a,const Vec3& b) {
@@ -40,8 +41,8 @@ int main() {
     TrafficSystem traffic;
     NPCSystem npcs;
     GameSettings settings;
-    sceIoMkdir("ux0:data/CityLimits", 0777);
-    const char* settingsPath="ux0:data/CityLimits/settings.cfg";
+    sceIoMkdir("ux0:data/SightCityUnderworld", 0777);
+    const char* settingsPath="ux0:data/SightCityUnderworld/settings.cfg";
     settings.load(settingsPath);
 
     const float dt=1.0f/30.0f; // Vita target: stable 30 fps.
