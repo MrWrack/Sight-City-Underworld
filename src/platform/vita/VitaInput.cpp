@@ -25,18 +25,28 @@ InputState VitaInput::poll(const GameSettings& settings,bool inVehicle) {
     const unsigned int pressed=pad.buttons & ~previous_.buttons;
 
     InputState in{};
-    // M67: standard PS Vita twin-stick layout.
-    // M70 physical PS Vita mapping: left stick up/down = forward/back, left/right = strafe. Right stick = camera/look.
+
+    // M76: physical PS Vita stick mapping restored.
+    // Left stick:
+    //   Up/Down  -> forward/back
+    //   Left/Right -> strafe left/right
     in.moveX=-axis(pad.ly,settings.stickDeadzone);
-    in.moveY=axis(pad.lx,settings.stickDeadzone);
+    in.moveY= axis(pad.lx,settings.stickDeadzone);
 
-    // M68 physical Vita correction: horizontal right-stick direction.
-    // push right -> look right, push left -> look left.
-    in.lookX=axis(pad.rx,settings.stickDeadzone)*settings.lookSensitivity*(settings.invertCameraX?-1.0f:1.0f);
+    // Right stick:
+    //   Left  -> look left
+    //   Right -> look right
+    //   Up    -> look up
+    //   Down  -> look down
+    // Keep horizontal sign POSITIVE; this is the mapping that previously worked
+    // on the physical original PS Vita.
+    in.lookX= axis(pad.rx,settings.stickDeadzone)
+             * settings.lookSensitivity
+             * (settings.invertCameraX ? -1.0f : 1.0f);
 
-    // M70 physical Vita correction: invert only right-stick vertical; horizontal already correct.
-    // push up -> look up, push down -> look down.
-    in.lookY=-axis(pad.ry,settings.stickDeadzone)*settings.lookSensitivity*(settings.invertCameraY?-1.0f:1.0f);
+    in.lookY= axis(pad.ry,settings.stickDeadzone)
+             * settings.lookSensitivity
+             * (settings.invertCameraY ? -1.0f : 1.0f);
 
     in.steer=in.moveX;
 
