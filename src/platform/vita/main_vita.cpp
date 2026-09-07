@@ -23,16 +23,32 @@ static float distXZ(const Vec3& a,const Vec3& b) {
     return std::sqrt(dx*dx+dz*dz);
 }
 
-static void makeCameraRelative(InputState& in,const Player& player,const Camera& camera) {
-    // Camera.cpp uses heading + yaw as the horizontal view angle.
-    const float a=player.heading+camera.yaw;
-    const float right=in.moveX;
-    const float forward=in.moveY;
-    const float s=std::sin(a);
-    const float c=std::cos(a);
+static void makeCameraRelative(InputState& in,const Camera& camera) {
+    // M84: derive movement directly from the actual camera direction.
+    // This avoids movement direction shifting/flipping when Dash turns
+    // while the camera is orbiting around a building.
+    float fx=camera.target.x-camera.position.x;
+    float fz=camera.target.z-camera.position.z;
+    float len=std::sqrt(fx*fx+fz*fz);
 
-    in.moveX=right*c+forward*s;
-    in.moveY=-right*s+forward*c;
+    if(len<0.0001f) {
+        fx=0.0f;
+        fz=1.0f;
+        len=1.0f;
+    }
+
+    fx/=len;
+    fz/=len;
+
+    // Horizontal right vector from the camera forward vector.
+    const float rx=fz;
+    const float rz=-fx;
+
+    const float localRight=in.moveX;
+    const float localForward=in.moveY;
+
+    in.moveX=rx*localRight + fx*localForward;
+    in.moveY=rz*localRight + fz*localForward;
 }
 
 int main() {
@@ -70,17 +86,20 @@ int main() {
 
         InputState in=controls.poll(settings,player.inVehicle);
 
-        // M73 temporary fly controls for development:
-        // Square = rise, Cross = descend. Left stick still moves horizontally.
+        // M84 temporary fly controls:
+        // X = rise, Circle = descend.
+        // Horizontal fly movement follows the camera just like normal movement.
         if(devMenu.flyMode() && !player.inVehicle) {
             const float flyHorizontalSpeed = 8.0f;
             const float flyVerticalSpeed = 6.0f;
 
-            player.position.x += in.moveX * flyHorizontalSpeed * dt;
-            player.position.z += in.moveY * flyHorizontalSpeed * dt;
+            InputState flyMove=in;
+            makeCameraRelative(flyMove,camera);
+            player.position.x += flyMove.moveX * flyHorizontalSpeed * dt;
+            player.position.z += flyMove.moveY * flyHorizontalSpeed * dt;
 
-            if(in.jump()) player.position.y += flyVerticalSpeed * dt;      // Square
-            if(in.sprint()) player.position.y -= flyVerticalSpeed * dt;    // Cross
+            if(in.sprint())  player.position.y += flyVerticalSpeed * dt;   // X = up
+            if(in.stealth()) player.position.y -= flyVerticalSpeed * dt;   // Circle = down
 
             player.velocity = {0,0,0};
         }
@@ -108,10 +127,10 @@ int main() {
         collisions.rebuild(environment,sightMap);
         if(!devMenu.flyMode()) {
             if(!player.inVehicle) {
-                // Preserve the camera's world-facing angle while Player::updateWorld
-                // turns Dash toward his movement direction.
+                // M84: movement uses the actual camera forward/right vectors.
+                // Keep camera controls untouched; this change only affects movement.
                 const float cameraWorldAngle=player.heading+camera.yaw;
-                makeCameraRelative(in,player,camera);
+                makeCameraRelative(in,camera);
                 player.updateWorld(in,dt,environment,collisions);
                 camera.yaw=cameraWorldAngle-player.heading;
             } else {
