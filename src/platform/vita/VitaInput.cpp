@@ -32,7 +32,10 @@ InputState VitaInput::poll(const GameSettings& settings,bool inVehicle) {
     //   Left/Right -> strafe left/right
     // M79: left stick is local movement before M75 camera-relative rotation.
     // Up = forward, Down = backward, Left = left, Right = right.
-    in.moveX= axis(pad.lx,settings.stickDeadzone);
+    // M81 physical PS Vita correction:
+    // Left stick: right = move right, left = move left.
+    // Forward/back remains unchanged because it already works correctly.
+    in.moveX=-axis(pad.lx,settings.stickDeadzone);
     in.moveY=-axis(pad.ly,settings.stickDeadzone);
 
     // Right stick:
@@ -42,7 +45,10 @@ InputState VitaInput::poll(const GameSettings& settings,bool inVehicle) {
     //   Down  -> look down
     // Keep horizontal sign POSITIVE; this is the mapping that previously worked
     // on the physical original PS Vita.
-    in.lookX= axis(pad.rx,settings.stickDeadzone)
+    // M81 physical PS Vita correction:
+    // Right stick: right = look right, left = look left.
+    // Vertical look remains unchanged because up/down already works.
+    in.lookX=-axis(pad.rx,settings.stickDeadzone)
              * settings.lookSensitivity
              * (settings.invertCameraX ? -1.0f : 1.0f);
 
