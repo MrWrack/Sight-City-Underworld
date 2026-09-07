@@ -30,8 +30,10 @@ InputState VitaInput::poll(const GameSettings& settings,bool inVehicle) {
     // Left stick:
     //   Up/Down  -> forward/back
     //   Left/Right -> strafe left/right
-    in.moveX=-axis(pad.ly,settings.stickDeadzone);
-    in.moveY= axis(pad.lx,settings.stickDeadzone);
+    // M79: left stick is local movement before M75 camera-relative rotation.
+    // Up = forward, Down = backward, Left = left, Right = right.
+    in.moveX= axis(pad.lx,settings.stickDeadzone);
+    in.moveY=-axis(pad.ly,settings.stickDeadzone);
 
     // Right stick:
     //   Left  -> look left

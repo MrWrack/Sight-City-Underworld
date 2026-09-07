@@ -42,7 +42,7 @@ int main() {
     VitaInput controls;
     VitaDevMenu devMenu; // Temporary dev menu.
     Player player;
-    player.position={0,0,-4};
+    player.position={0.28f,2.20f,7.92f}; // M80 spawn position
     Vehicle car;
     car.position={4,0,4};
     Camera camera;
@@ -70,9 +70,8 @@ int main() {
 
         InputState in=controls.poll(settings,player.inVehicle);
 
-        // M78 temporary fly controls for development:
-        // X (Cross) = rise, Circle = descend.
-        // Left stick keeps horizontal movement.
+        // M73 temporary fly controls for development:
+        // Square = rise, Cross = descend. Left stick still moves horizontally.
         if(devMenu.flyMode() && !player.inVehicle) {
             const float flyHorizontalSpeed = 8.0f;
             const float flyVerticalSpeed = 6.0f;
@@ -80,9 +79,8 @@ int main() {
             player.position.x += in.moveX * flyHorizontalSpeed * dt;
             player.position.z += in.moveY * flyHorizontalSpeed * dt;
 
-            // On foot VitaInput maps Cross to Sprint and Circle to Stealth.
-            if(in.sprint())  player.position.y += flyVerticalSpeed * dt;   // X = up
-            if(in.stealth()) player.position.y -= flyVerticalSpeed * dt;   // Circle = down
+            if(in.jump()) player.position.y += flyVerticalSpeed * dt;      // Square
+            if(in.sprint()) player.position.y -= flyVerticalSpeed * dt;    // Cross
 
             player.velocity = {0,0,0};
         }
