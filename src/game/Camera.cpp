@@ -8,7 +8,9 @@ void Camera::cycle(bool firstPersonAllowed){
 }
 void Camera::follow(const Vec3& focus,float heading,float lookX,float lookY,float dt,bool inVehicle){
     yaw += lookX*2.4f*dt;
-    pitch=clampf(pitch+lookY*1.8f*dt,-0.35f,0.80f);
+    // M82: wider vertical camera tilt on PS Vita.
+    // Allows looking substantially farther up and down.
+    pitch=clampf(pitch+lookY*1.8f*dt,-1.15f,1.15f);
     const float a=heading+yaw;
     target=focus+Vec3{0,inVehicle?1.15f:1.55f,0};
     if(mode==CameraMode::FirstPerson){
