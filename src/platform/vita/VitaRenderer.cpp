@@ -122,8 +122,8 @@ void drawExpandedGround(const Camera& cam) {
     // M83: larger neighborhood around the current physical-Vita test area.
     // Tiled instead of one huge quad so near-plane rejection does not remove
     // the whole ground when one corner is behind the camera.
-    const unsigned grassA = RGBA8(72, 94, 68, 255);
-    const unsigned grassB = RGBA8(78, 101, 72, 255);
+    const unsigned grassA = static_cast<unsigned>(RGBA8(72, 94, 68, 255));
+    const unsigned grassB = static_cast<unsigned>(RGBA8(78, 101, 72, 255));
 
     constexpr float TILE = 20.0f;
     for (int z=-4; z<6; ++z) {
@@ -137,8 +137,8 @@ void drawExpandedGround(const Camera& cam) {
 }
 
 void roadX(float z, const Camera& cam) {
-    const unsigned asphalt = RGBA8(42,44,47,255);
-    const unsigned line = RGBA8(218,205,116,255);
+    const unsigned asphalt = static_cast<unsigned>(RGBA8(42,44,47,255));
+    const unsigned line = static_cast<unsigned>(RGBA8(218,205,116,255));
 
     // Road from x -80 to +100.
     for (int i=0;i<9;i++) {
@@ -153,8 +153,8 @@ void roadX(float z, const Camera& cam) {
 }
 
 void roadZ(float x, const Camera& cam) {
-    const unsigned asphalt = RGBA8(42,44,47,255);
-    const unsigned line = RGBA8(218,205,116,255);
+    const unsigned asphalt = static_cast<unsigned>(RGBA8(42,44,47,255));
+    const unsigned line = static_cast<unsigned>(RGBA8(218,205,116,255));
 
     // Road from z -80 to +120.
     for (int i=0;i<10;i++) {
@@ -205,7 +205,7 @@ void cityBuilding(const Vec3& c,float sx,float sy,float sz,
     // Simple GPU-cheap windows. Still pure geometry: no images or textures.
     simpleWindowsFront(
         c,sx,sy,sz,cam,
-        RGBA8(62,91,112,255)
+        static_cast<unsigned>(RGBA8(62,91,112,255))
     );
 
     // Small rooftop block on taller buildings.
@@ -214,9 +214,9 @@ void cityBuilding(const Vec3& c,float sx,float sy,float sz,
             {c.x+sx*0.12f,c.y+sy,c.z-sz*0.08f},
             sx*0.28f,0.75f,sz*0.24f,
             cam,
-            RGBA8(112,113,116,255),
-            RGBA8(82,84,87,255),
-            RGBA8(143,144,146,255)
+            static_cast<unsigned>(RGBA8(112,113,116,255)),
+            static_cast<unsigned>(RGBA8(82,84,87,255)),
+            static_cast<unsigned>(RGBA8(143,144,146,255))
         );
     }
 }
@@ -231,30 +231,30 @@ void drawExpandedBuildings(const Camera& cam) {
 
     static const B buildings[] = {
         // Around spawn / original test building.
-        {  0.0f, 17.0f,  8.0f,  8.0f,  8.0f, RGBA8(150,142,145,255), RGBA8(110,104,108,255), RGBA8(180,174,177,255)},
-        {-14.0f, 18.0f, 10.0f, 11.0f,  9.0f, RGBA8(139,145,151,255), RGBA8( 98,106,114,255), RGBA8(170,176,181,255)},
-        { 15.0f, 18.0f, 11.0f,  7.0f, 10.0f, RGBA8(164,143,123,255), RGBA8(119, 99, 83,255), RGBA8(190,169,147,255)},
+        {  0.0f, 17.0f,  8.0f,  8.0f,  8.0f, static_cast<unsigned>(RGBA8(150,142,145,255)), static_cast<unsigned>(RGBA8(110,104,108,255)), static_cast<unsigned>(RGBA8(180,174,177,255))},
+        {-14.0f, 18.0f, 10.0f, 11.0f,  9.0f, static_cast<unsigned>(RGBA8(139,145,151,255)), RGBA8( 98,106,114,255), static_cast<unsigned>(RGBA8(170,176,181,255))},
+        { 15.0f, 18.0f, 11.0f,  7.0f, 10.0f, static_cast<unsigned>(RGBA8(164,143,123,255)), static_cast<unsigned>(RGBA8(119, 99, 83,255)), static_cast<unsigned>(RGBA8(190,169,147,255))},
 
         // Next block.
-        {-31.0f, 20.0f, 12.0f, 14.0f, 11.0f, RGBA8(126,136,148,255), RGBA8( 88, 98,109,255), RGBA8(156,165,176,255)},
-        { 32.0f, 20.0f, 12.0f, 12.0f, 11.0f, RGBA8(153,150,139,255), RGBA8(108,106, 96,255), RGBA8(180,177,165,255)},
-        {-47.0f, 18.0f, 10.0f,  8.0f, 12.0f, RGBA8(145,129,121,255), RGBA8(104, 90, 84,255), RGBA8(174,156,147,255)},
-        { 48.0f, 18.0f, 11.0f, 16.0f, 10.0f, RGBA8(122,132,137,255), RGBA8( 86, 95,100,255), RGBA8(153,163,168,255)},
+        {-31.0f, 20.0f, 12.0f, 14.0f, 11.0f, static_cast<unsigned>(RGBA8(126,136,148,255)), RGBA8( 88, 98,109,255), static_cast<unsigned>(RGBA8(156,165,176,255))},
+        { 32.0f, 20.0f, 12.0f, 12.0f, 11.0f, static_cast<unsigned>(RGBA8(153,150,139,255)), static_cast<unsigned>(RGBA8(108,106, 96,255)), static_cast<unsigned>(RGBA8(180,177,165,255))},
+        {-47.0f, 18.0f, 10.0f,  8.0f, 12.0f, static_cast<unsigned>(RGBA8(145,129,121,255)), static_cast<unsigned>(RGBA8(104, 90, 84,255)), static_cast<unsigned>(RGBA8(174,156,147,255))},
+        { 48.0f, 18.0f, 11.0f, 16.0f, 10.0f, static_cast<unsigned>(RGBA8(122,132,137,255)), RGBA8( 86, 95,100,255), static_cast<unsigned>(RGBA8(153,163,168,255))},
 
         // Deeper into the expanded area.
-        {-14.0f, 39.0f, 11.0f, 10.0f, 10.0f, RGBA8(156,145,132,255), RGBA8(111,100, 89,255), RGBA8(184,173,158,255)},
-        { 14.0f, 39.0f, 10.0f, 18.0f, 11.0f, RGBA8(126,137,149,255), RGBA8( 88, 98,110,255), RGBA8(157,167,178,255)},
-        {-32.0f, 40.0f, 12.0f,  9.0f, 12.0f, RGBA8(151,138,134,255), RGBA8(106, 94, 91,255), RGBA8(180,166,161,255)},
-        { 33.0f, 40.0f, 11.0f, 13.0f, 12.0f, RGBA8(137,142,143,255), RGBA8( 96,101,102,255), RGBA8(166,171,171,255)},
+        {-14.0f, 39.0f, 11.0f, 10.0f, 10.0f, static_cast<unsigned>(RGBA8(156,145,132,255)), static_cast<unsigned>(RGBA8(111,100, 89,255)), static_cast<unsigned>(RGBA8(184,173,158,255))},
+        { 14.0f, 39.0f, 10.0f, 18.0f, 11.0f, static_cast<unsigned>(RGBA8(126,137,149,255)), RGBA8( 88, 98,110,255), static_cast<unsigned>(RGBA8(157,167,178,255))},
+        {-32.0f, 40.0f, 12.0f,  9.0f, 12.0f, static_cast<unsigned>(RGBA8(151,138,134,255)), static_cast<unsigned>(RGBA8(106, 94, 91,255)), static_cast<unsigned>(RGBA8(180,166,161,255))},
+        { 33.0f, 40.0f, 11.0f, 13.0f, 12.0f, static_cast<unsigned>(RGBA8(137,142,143,255)), RGBA8( 96,101,102,255), static_cast<unsigned>(RGBA8(166,171,171,255))},
 
-        {-48.0f, 42.0f, 12.0f, 17.0f, 12.0f, RGBA8(130,139,145,255), RGBA8( 91, 99,106,255), RGBA8(160,169,175,255)},
-        { 49.0f, 42.0f, 12.0f, 10.0f, 12.0f, RGBA8(162,145,127,255), RGBA8(116,100, 85,255), RGBA8(191,172,151,255)},
+        {-48.0f, 42.0f, 12.0f, 17.0f, 12.0f, static_cast<unsigned>(RGBA8(130,139,145,255)), RGBA8( 91, 99,106,255), static_cast<unsigned>(RGBA8(160,169,175,255))},
+        { 49.0f, 42.0f, 12.0f, 10.0f, 12.0f, static_cast<unsigned>(RGBA8(162,145,127,255)), static_cast<unsigned>(RGBA8(116,100, 85,255)), static_cast<unsigned>(RGBA8(191,172,151,255))},
 
         // Far block / skyline.
-        {-28.0f, 65.0f, 14.0f, 22.0f, 14.0f, RGBA8(119,130,142,255), RGBA8( 83, 93,104,255), RGBA8(150,160,171,255)},
-        { -8.0f, 67.0f, 13.0f, 28.0f, 13.0f, RGBA8(138,139,144,255), RGBA8( 96, 98,104,255), RGBA8(169,170,175,255)},
-        { 11.0f, 66.0f, 14.0f, 24.0f, 14.0f, RGBA8(128,137,146,255), RGBA8( 89, 98,107,255), RGBA8(159,168,177,255)},
-        { 31.0f, 64.0f, 13.0f, 19.0f, 14.0f, RGBA8(154,145,135,255), RGBA8(109,101, 92,255), RGBA8(183,174,162,255)}
+        {-28.0f, 65.0f, 14.0f, 22.0f, 14.0f, static_cast<unsigned>(RGBA8(119,130,142,255)), RGBA8( 83, 93,104,255), static_cast<unsigned>(RGBA8(150,160,171,255))},
+        { -8.0f, 67.0f, 13.0f, 28.0f, 13.0f, static_cast<unsigned>(RGBA8(138,139,144,255)), RGBA8( 96, 98,104,255), static_cast<unsigned>(RGBA8(169,170,175,255))},
+        { 11.0f, 66.0f, 14.0f, 24.0f, 14.0f, static_cast<unsigned>(RGBA8(128,137,146,255)), RGBA8( 89, 98,107,255), static_cast<unsigned>(RGBA8(159,168,177,255))},
+        { 31.0f, 64.0f, 13.0f, 19.0f, 14.0f, static_cast<unsigned>(RGBA8(154,145,135,255)), static_cast<unsigned>(RGBA8(109,101, 92,255)), static_cast<unsigned>(RGBA8(183,174,162,255))}
     };
 
     for (const B& b : buildings) {
@@ -285,7 +285,7 @@ bool VitaRenderer::init() {
     if (vita2d_init() < 0) return false;
 
     // Solid clear color only. No textures/images.
-    vita2d_set_clear_color(RGBA8(110, 175, 225, 255));
+    vita2d_set_clear_color(static_cast<unsigned>(RGBA8(110, 175, 225, 255)));
     return true;
 }
 
@@ -311,7 +311,7 @@ void VitaRenderer::draw(const Player& player,
     // Tiny center marker.
     vita2d_draw_rectangle(
         477.0f, 269.0f, 6.0f, 6.0f,
-        RGBA8(255,255,255,255)
+        static_cast<unsigned>(RGBA8(255,255,255,255))
     );
 
     vita2d_end_drawing();
