@@ -11,6 +11,7 @@
 #include "game/NPC.h"
 #include "platform/vita/VitaInput.h"
 #include "platform/vita/VitaRenderer.h"
+#include "platform/vita/VitaDevMenu.h"
 #include <psp2/kernel/processmgr.h>
 #include <psp2/kernel/threadmgr.h>
 #include <psp2/io/fcntl.h>
@@ -22,11 +23,24 @@ static float distXZ(const Vec3& a,const Vec3& b) {
     return std::sqrt(dx*dx+dz*dz);
 }
 
+static void makeCameraRelative(InputState& in,const Player& player,const Camera& camera) {
+    // Camera.cpp uses heading + yaw as the horizontal view angle.
+    const float a=player.heading+camera.yaw;
+    const float right=in.moveX;
+    const float forward=in.moveY;
+    const float s=std::sin(a);
+    const float c=std::cos(a);
+
+    in.moveX=right*c+forward*s;
+    in.moveY=-right*s+forward*c;
+}
+
 int main() {
     VitaRenderer renderer;
     if(!renderer.init()) return -1;
 
     VitaInput controls;
+    VitaDevMenu devMenu; // Temporary dev menu.
     Player player;
     player.position={0,0,-4};
     Vehicle car;
@@ -36,7 +50,7 @@ int main() {
     EnvironmentSystem environment;
     SightCityMap sightMap;
     WorldCollisionSystem collisions;
-    world.radius=1; // M63: conservative physical-Vita streaming radius.
+    world.radius=2;
     WantedSystem wanted;
     TrafficSystem traffic;
     NPCSystem npcs;
@@ -47,7 +61,29 @@ int main() {
 
     const float dt=1.0f/30.0f; // Vita target: stable 30 fps.
     while(!controls.quitRequested()) {
+        // Temporary developer menu. SELECT opens/closes it.
+        if(devMenu.update(player,car,wanted,environment,collisions)) {
+            devMenu.draw(player,car,wanted);
+            sceKernelDelayThread(1000);
+            continue;
+        }
+
         InputState in=controls.poll(settings,player.inVehicle);
+
+        // M73 temporary fly controls for development:
+        // Square = rise, Cross = descend. Left stick still moves horizontally.
+        if(devMenu.flyMode() && !player.inVehicle) {
+            const float flyHorizontalSpeed = 8.0f;
+            const float flyVerticalSpeed = 6.0f;
+
+            player.position.x += in.moveX * flyHorizontalSpeed * dt;
+            player.position.z += in.moveY * flyHorizontalSpeed * dt;
+
+            if(in.jump()) player.position.y += flyVerticalSpeed * dt;      // Square
+            if(in.sprint()) player.position.y -= flyVerticalSpeed * dt;    // Cross
+
+            player.velocity = {0,0,0};
+        }
 
         if(in.enterExitVehicle()) {
             if(player.inVehicle) {
@@ -70,7 +106,19 @@ int main() {
         environment.stream(preFocus,3);
         sightMap.stream(preFocus,3);
         collisions.rebuild(environment,sightMap);
-        player.updateWorld(in,dt,environment,collisions);
+        if(!devMenu.flyMode()) {
+            if(!player.inVehicle) {
+                // Preserve the camera's world-facing angle while Player::updateWorld
+                // turns Dash toward his movement direction.
+                const float cameraWorldAngle=player.heading+camera.yaw;
+                makeCameraRelative(in,player,camera);
+                player.updateWorld(in,dt,environment,collisions);
+                camera.yaw=cameraWorldAngle-player.heading;
+            } else {
+                player.updateWorld(in,dt,environment,collisions);
+            }
+        }
+        if(devMenu.godMode()) player.health=100.0f;
         car.update(in,dt,player.inVehicle,settings.vehicleIndicators,settings.vehicleLights);
         Vec3 focus=player.inVehicle?car.position:player.position;
         float heading=player.inVehicle?car.heading:player.heading;
