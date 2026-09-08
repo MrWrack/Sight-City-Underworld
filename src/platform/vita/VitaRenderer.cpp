@@ -411,20 +411,130 @@ void drawOuterRoadsAndDetails(const Camera& cam) {
     for(const auto& p:outerTrees) treeSimple(p[0],p[1],cam);
 }
 
+
+// -----------------------------------------------------------------------------
+// M90 FULL 120 KM x 120 KM STREAMED WORLD
+// Whole map coordinates exist from -60,000m to +60,000m on X/Z.
+// Original PS Vita only receives nearby 64m cells, never the whole map at once.
+// No textures/images: geometry + solid colors only.
+// -----------------------------------------------------------------------------
+static constexpr float M90_WORLD_HALF = 60000.0f;
+static constexpr float M90_CELL = 64.0f;
+static constexpr int M90_RADIUS = 2;
+
+static unsigned m90Hash(int x,int z) {
+    unsigned h=static_cast<unsigned>(x)*0x8da6b343u;
+    h^=static_cast<unsigned>(z)*0xd8163841u;
+    h^=(h>>13); h*=0x85ebca6bu; return h^(h>>16);
+}
+
+static int m90Region(float x,float z) {
+    // Lightweight canonical-region bands for staged Vita development.
+    // Exact accepted map geography can be layered later without changing streaming.
+    if(z < -42000.0f) return 0;                    // Mount Ridge / north
+    if(z > 42000.0f && x > 10000.0f) return 1;    // Desert Plains
+    if(z > 35000.0f && x < -15000.0f) return 2;   // Farmland / South Hills
+    if(x > 43000.0f || x < -43000.0f) return 3;   // Coasts
+    if(z > 25000.0f) return 4;                    // southern districts/port approach
+    return 5;                                     // central Sight City / suburbs
+}
+
+static unsigned m90GroundColor(int region,unsigned h) {
+    switch(region) {
+        case 0: return static_cast<unsigned>(RGBA8(72,96,66,255));
+        case 1: return static_cast<unsigned>(RGBA8(173,148,94,255));
+        case 2: return static_cast<unsigned>(RGBA8(103,128,76,255));
+        case 3: return static_cast<unsigned>(RGBA8(91,126,78,255));
+        case 4: return static_cast<unsigned>(RGBA8(83,116,73,255));
+        default:return ((h&7u)==0u)?static_cast<unsigned>(RGBA8(98,112,72,255)):
+                                     static_cast<unsigned>(RGBA8(75,127,75,255));
+    }
+}
+
+void drawM90Cell(int cx,int cz,const Camera& cam) {
+    const float x0=cx*M90_CELL, z0=cz*M90_CELL;
+    const float x1=x0+M90_CELL, z1=z0+M90_CELL;
+    if(x1 < -M90_WORLD_HALF || x0 > M90_WORLD_HALF ||
+       z1 < -M90_WORLD_HALF || z0 > M90_WORLD_HALF) return;
+
+    const unsigned h=m90Hash(cx,cz);
+    const int region=m90Region(x0+32.0f,z0+32.0f);
+    groundTile(x0,z0,x1,z1,cam,m90GroundColor(region,h));
+
+    // Continuous sparse road grid across the entire map.
+    const unsigned road=static_cast<unsigned>(RGBA8(46,47,49,255));
+    const unsigned curb=static_cast<unsigned>(RGBA8(151,152,149,255));
+    const unsigned line=static_cast<unsigned>(RGBA8(219,180,56,255));
+    if((cx%4)==0) {
+        float rx=x0+32.0f;
+        groundTile(rx-4.0f,z0,rx+4.0f,z1,cam,road);
+        groundTile(rx-5.0f,z0,rx-4.1f,z1,cam,curb);
+        groundTile(rx+4.1f,z0,rx+5.0f,z1,cam,curb);
+        for(float zz=z0+4.0f;zz<z1;zz+=16.0f)
+            groundTile(rx-0.35f,zz,rx+0.35f,zz+7.0f,cam,line);
+    }
+    if((cz%4)==0) {
+        float rz=z0+32.0f;
+        groundTile(x0,rz-4.0f,x1,rz+4.0f,cam,road);
+        groundTile(x0,rz-5.0f,x1,rz-4.1f,cam,curb);
+        groundTile(x0,rz+4.1f,x1,rz+5.0f,cam,curb);
+        for(float xx=x0+4.0f;xx<x1;xx+=16.0f)
+            groundTile(xx,rz-0.35f,xx+7.0f,rz+0.35f,cam,line);
+    }
+
+    // Region density: fewer buildings in mountains/desert/farmland, more in city.
+    unsigned density=0;
+    if(region==5) density=2;
+    else if(region==4 || region==3) density=((h>>4)&1u);
+    else density=((h&7u)==0u)?1u:0u;
+
+    for(unsigned i=0;i<density;i++) {
+        unsigned q=m90Hash(cx*13+int(i)*17,cz*19+int(i)*23);
+        float bx=x0+11.0f+float(q%41u);
+        float bz=z0+11.0f+float((q>>8)%41u);
+        float sx=8.0f+float((q>>16)%5u);
+        float sz=8.0f+float((q>>20)%5u);
+        float sy=(region==5?8.0f:5.0f)+float((q>>24)%(region==5?20u:8u));
+        if((cx%4)==0 && bx>x0+21.0f && bx<x0+43.0f) bx=x0+12.0f;
+        if((cz%4)==0 && bz>z0+21.0f && bz<z0+43.0f) bz=z0+12.0f;
+        const unsigned c1=static_cast<unsigned>(RGBA8(128+(q&25u),126+((q>>5)&25u),121+((q>>10)&25u),255));
+        const unsigned c2=static_cast<unsigned>(RGBA8(89+(q&20u),89+((q>>5)&20u),89+((q>>10)&20u),255));
+        const unsigned c3=static_cast<unsigned>(RGBA8(158+(q&20u),155+((q>>5)&20u),151+((q>>10)&20u),255));
+        cityBuilding({bx,0.0f,bz},sx,sy,sz,cam,c1,c2,c3);
+    }
+
+    // Sparse geometry-only vegetation.
+    if((h&3u)==0u && region!=1) {
+        float tx=x0+8.0f+float((h>>9)%48u);
+        float tz=z0+8.0f+float((h>>15)%48u);
+        treeSimple(tx,tz,cam);
+    }
+}
+
+void drawM90FullMapStream(const Camera& cam) {
+    int ccx=static_cast<int>(std::floor(cam.position.x/M90_CELL));
+    int ccz=static_cast<int>(std::floor(cam.position.z/M90_CELL));
+    for(int dz=-M90_RADIUS;dz<=M90_RADIUS;dz++)
+        for(int dx=-M90_RADIUS;dx<=M90_RADIUS;dx++)
+            drawM90Cell(ccx+dx,ccz+dz,cam);
+}
+
 void drawTestCity(const Camera& cam) {
-    drawExpandedGround(cam);
+    // Full 120 x 120 km world through streaming.
+    drawM90FullMapStream(cam);
 
-    // Two crossing streets make the larger space easier to navigate and
-    // visually show that the playable test area was expanded.
-    roadX(7.0f,cam);
-    roadX(52.0f,cam);
-    roadZ(-22.0f,cam);
-    roadZ(22.0f,cam);
-
-    drawExpandedBuildings(cam);
-    drawStreetDetails(cam);
-    drawOuterRoadsAndDetails(cam);
-    drawOuterDistrictBuildings(cam);
+    // Keep the physically-tested M89 downtown block around the spawn.
+    if(std::fabs(cam.position.x)<220.0f && std::fabs(cam.position.z)<220.0f) {
+        drawExpandedGround(cam);
+        roadX(7.0f,cam);
+        roadX(52.0f,cam);
+        roadZ(-22.0f,cam);
+        roadZ(22.0f,cam);
+        drawExpandedBuildings(cam);
+        drawStreetDetails(cam);
+        drawOuterRoadsAndDetails(cam);
+        drawOuterDistrictBuildings(cam);
+    }
 }
 
 } // namespace
@@ -452,7 +562,7 @@ void VitaRenderer::draw(const Player& player,
     vita2d_start_drawing();
     vita2d_clear_screen();
 
-    // M89 original Vita expansion: pure geometry only.
+    // M90 full-map Vita streaming: pure geometry only.
     // Buildings use separated lots so their footprints never overlap.
     drawTestCity(camera);
 
