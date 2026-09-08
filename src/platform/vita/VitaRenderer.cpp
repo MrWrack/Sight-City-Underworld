@@ -519,6 +519,129 @@ void drawM90FullMapStream(const Camera& cam) {
             drawM90Cell(ccx+dx,ccz+dz,cam);
 }
 
+
+// -----------------------------------------------------------------------------
+// M91 VISUAL + NPC AI PASS
+// Original Vita target: geometry detail is distance-limited and NPC count capped.
+// -----------------------------------------------------------------------------
+struct M91Npc {
+    Vec3 p;
+    Vec3 goal;
+    float speed;
+    unsigned seed;
+};
+
+static M91Npc gM91Npcs[12];
+static bool gM91NpcInit=false;
+
+static float m91Dist2XZ(const Vec3& a,const Vec3& b) {
+    const float dx=a.x-b.x, dz=a.z-b.z;
+    return dx*dx+dz*dz;
+}
+
+static void m91InitNpcs(const Camera& cam) {
+    for(int i=0;i<12;i++) {
+        const float a=float(i)*0.5235987f;
+        gM91Npcs[i].p={cam.position.x+std::cos(a)*(18.0f+float(i%4)*5.0f),0.0f,
+                       cam.position.z+std::sin(a)*(18.0f+float(i%4)*5.0f)};
+        gM91Npcs[i].goal={gM91Npcs[i].p.x+float((i%3)-1)*18.0f,0.0f,
+                          gM91Npcs[i].p.z+float(((i+1)%3)-1)*18.0f};
+        gM91Npcs[i].speed=0.75f+0.08f*float(i%5);
+        gM91Npcs[i].seed=0x1234u+unsigned(i)*977u;
+    }
+    gM91NpcInit=true;
+}
+
+static void m91UpdateNpcs(const Camera& cam,float dt) {
+    if(!gM91NpcInit) m91InitNpcs(cam);
+    if(dt<0.0f) dt=0.0f;
+    if(dt>0.05f) dt=0.05f;
+
+    for(int i=0;i<12;i++) {
+        M91Npc& n=gM91Npcs[i];
+        float dx=n.goal.x-n.p.x, dz=n.goal.z-n.p.z;
+        float d2=dx*dx+dz*dz;
+        if(d2<2.0f) {
+            n.seed=n.seed*1664525u+1013904223u;
+            float ox=float(int((n.seed>>8)&31u)-15);
+            n.seed=n.seed*1664525u+1013904223u;
+            float oz=float(int((n.seed>>8)&31u)-15);
+            n.goal={n.p.x+ox,0.0f,n.p.z+oz};
+        } else {
+            float inv=1.0f/std::sqrt(d2);
+            n.p.x+=dx*inv*n.speed*dt;
+            n.p.z+=dz*inv*n.speed*dt;
+        }
+
+        // Recycle NPCs that become too distant, keeping CPU/render cost bounded.
+        if(m91Dist2XZ(n.p,cam.position)>95.0f*95.0f) {
+            n.p={cam.position.x+float((i%4)-2)*8.0f,0.0f,
+                 cam.position.z+18.0f+float(i/4)*7.0f};
+            n.goal={n.p.x+12.0f,0.0f,n.p.z};
+        }
+    }
+}
+
+static void m91DrawNpc(const M91Npc& n,const Camera& cam) {
+    // Small 3D person made from boxes: legs, torso, arms, head.
+    const unsigned jeans=static_cast<unsigned>(RGBA8(52,64,82,255));
+    const unsigned shirt=static_cast<unsigned>(RGBA8(124,55,52,255));
+    const unsigned skin=static_cast<unsigned>(RGBA8(190,151,118,255));
+    const unsigned dark=static_cast<unsigned>(RGBA8(44,42,40,255));
+    boxPool({n.p.x-0.16f,n.p.y,n.p.z},0.20f,0.82f,0.22f,cam,jeans,jeans,jeans);
+    boxPool({n.p.x+0.16f,n.p.y,n.p.z},0.20f,0.82f,0.22f,cam,jeans,jeans,jeans);
+    boxPool({n.p.x,n.p.y+0.78f,n.p.z},0.68f,0.82f,0.32f,cam,shirt,shirt,shirt);
+    boxPool({n.p.x-0.43f,n.p.y+0.84f,n.p.z},0.14f,0.72f,0.16f,cam,skin,skin,skin);
+    boxPool({n.p.x+0.43f,n.p.y+0.84f,n.p.z},0.14f,0.72f,0.16f,cam,skin,skin,skin);
+    boxPool({n.p.x,n.p.y+1.62f,n.p.z},0.42f,0.42f,0.40f,cam,skin,skin,dark);
+}
+
+static void m91DrawNpcs(const Camera& cam) {
+    for(int i=0;i<12;i++)
+        if(m91Dist2XZ(gM91Npcs[i].p,cam.position)<72.0f*72.0f)
+            m91DrawNpc(gM91Npcs[i],cam);
+}
+
+static void m91BuildingDetail(const Vec3& p,float sx,float sy,float sz,const Camera& cam) {
+    // Extra true-3D geometry: roof lip, doorway, window strips, small awning.
+    const unsigned trim=static_cast<unsigned>(RGBA8(82,86,90,255));
+    const unsigned glass=static_cast<unsigned>(RGBA8(92,132,151,255));
+    const unsigned door=static_cast<unsigned>(RGBA8(58,48,42,255));
+    boxPool({p.x,p.y+sy,p.z},sx+0.45f,0.28f,sz+0.45f,cam,trim,trim,trim);
+    boxPool({p.x,p.y+1.05f,p.z-sz*0.51f},1.15f,2.10f,0.12f,cam,door,door,door);
+    boxPool({p.x,p.y+2.35f,p.z-sz*0.53f},2.1f,0.18f,0.65f,cam,trim,trim,trim);
+
+    if(sy>7.0f) {
+        for(float y=2.2f;y<sy-1.0f;y+=2.4f) {
+            boxPool({p.x-sx*0.24f,p.y+y,p.z-sz*0.515f},1.15f,0.72f,0.10f,cam,glass,glass,glass);
+            boxPool({p.x+sx*0.24f,p.y+y,p.z-sz*0.515f},1.15f,0.72f,0.10f,cam,glass,glass,glass);
+        }
+    }
+}
+
+static void m91DetailedBlock(const Camera& cam) {
+    // High-detail demonstration buildings close to the known spawn.
+    const unsigned wallA=static_cast<unsigned>(RGBA8(151,143,132,255));
+    const unsigned wallB=static_cast<unsigned>(RGBA8(112,105,96,255));
+    const unsigned roof=static_cast<unsigned>(RGBA8(179,169,154,255));
+
+    const Vec3 a={-18.0f,0.0f,-12.0f};
+    const Vec3 b={18.0f,0.0f,-12.0f};
+    cityBuilding(a,12.0f,12.0f,14.0f,cam,wallA,wallB,roof);
+    cityBuilding(b,14.0f,18.0f,13.0f,cam,wallA,wallB,roof);
+    m91BuildingDetail(a,12.0f,12.0f,14.0f,cam);
+    m91BuildingDetail(b,14.0f,18.0f,13.0f,cam);
+}
+
+static void m91Frame(const Camera& cam) {
+    // Fixed prototype step avoids touching the already-confirmed M81/M84 input loop.
+    // Later this can receive the game's real dt.
+    m91UpdateNpcs(cam,1.0f/30.0f);
+    m91DrawNpcs(cam);
+    if(std::fabs(cam.position.x)<90.0f && std::fabs(cam.position.z)<90.0f)
+        m91DetailedBlock(cam);
+}
+
 void drawTestCity(const Camera& cam) {
     // Full 120 x 120 km world through streaming.
     drawM90FullMapStream(cam);
@@ -535,6 +658,8 @@ void drawTestCity(const Camera& cam) {
         drawOuterRoadsAndDetails(cam);
         drawOuterDistrictBuildings(cam);
     }
+
+    m91Frame(cam);
 }
 
 } // namespace
