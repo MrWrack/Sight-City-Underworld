@@ -870,7 +870,13 @@ static void m96MountainPeak(const Vec3& base,float radius,float height,const Cam
     const Vec3 top={base.x,base.y+height,base.z};
     for(int i=0;i<sides;i++) {
         const int j=(i+1)%sides;
-        triPool(ring[i],ring[j],top,cam,(i&1)?low:high);
+
+        // M96B compile fix:
+        // triPool() takes projected P2 vertices, not world-space Vec3 values.
+        const P2 pa=projectSafe(ring[i],cam);
+        const P2 pb=projectSafe(ring[j],cam);
+        const P2 pc=projectSafe(top,cam);
+        triPool(pa,pb,pc,(i&1)?low:high);
     }
 }
 
