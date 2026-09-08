@@ -904,6 +904,48 @@ static void m94DrawCoordinatesHud(const Player& player) {
     vita2d_pgf_draw_text(gM94DebugFont,x+pad,y+47,RGBA8(220,230,238,255),scale,line2);
 }
 
+
+// M95 -----------------------------------------------------------------------
+// Stable world anchoring for streamed procedural content.
+// IMPORTANT: object placement may depend on world cell coordinates + fixed seed
+// only. Never use camera/player position to choose an object's world position.
+static unsigned m95HashCell(int cx,int cz,unsigned salt) {
+    unsigned x = (unsigned)cx * 0x8da6b343u;
+    unsigned z = (unsigned)cz * 0xd8163841u;
+    unsigned h = x ^ z ^ salt ^ 0xcb1ab31fu;
+    h ^= h >> 16; h *= 0x7feb352du;
+    h ^= h >> 15; h *= 0x846ca68bu;
+    h ^= h >> 16;
+    return h;
+}
+static float m95Rand01(unsigned h) {
+    return (float)(h & 0x00ffffffu) / 16777215.0f;
+}
+static float m95LotOffset(unsigned h,float halfRange) {
+    return (m95Rand01(h) * 2.0f - 1.0f) * halfRange;
+}
+static bool m95RectsOverlap(float ax,float az,float ahx,float ahz,
+                            float bx,float bz,float bhx,float bhz,
+                            float gap) {
+    return std::fabs(ax-bx) < (ahx+bhx+gap) &&
+           std::fabs(az-bz) < (ahz+bhz+gap);
+}
+struct M95PlacedBuilding {
+    float x,z,sx,sz;
+};
+static bool m95CanPlace(const M95PlacedBuilding* placed,int count,
+                        float x,float z,float sx,float sz) {
+    // Extra clearance makes buildings visibly separate on original Vita.
+    const float gap = 4.0f;
+    for(int i=0;i<count;i++) {
+        if(m95RectsOverlap(x,z,sx*.5f,sz*.5f,
+                           placed[i].x,placed[i].z,
+                           placed[i].sx*.5f,placed[i].sz*.5f,gap))
+            return false;
+    }
+    return true;
+}
+
 bool VitaRenderer::init() {
     if (vita2d_init() < 0) return false;
     gM94DebugFont = vita2d_load_default_pgf();
@@ -915,6 +957,51 @@ bool VitaRenderer::init() {
 
 void VitaRenderer::shutdown() {
     vita2d_fini();
+}
+
+
+// M95 stable city-cell building pass.
+// World coordinates are computed from wc.x/wc.z and remain identical while
+// walking, flying, rotating the camera, unloading and reloading the cell.
+static void m95DrawStableCellBuildings(const Camera& cam,const WorldCell& wc) {
+    const float cell = (float)World::CellSizeMeters;
+    const float x0 = (float)wc.x * cell;
+    const float z0 = (float)wc.z * cell;
+
+    M95PlacedBuilding placed[8];
+    int placedCount = 0;
+
+    // Fixed lot centers inside each 64 m cell. Jitter is deterministic and
+    // deliberately small, so buildings cannot jump between lots.
+    static const float lotX[4] = {12.0f, 26.0f, 42.0f, 54.0f};
+    static const float lotZ[4] = {12.0f, 52.0f, 12.0f, 52.0f};
+
+    for(int i=0;i<4;i++) {
+        unsigned h=m95HashCell(wc.x,wc.z,0x9500u+(unsigned)i*97u);
+        float sx=7.0f + m95Rand01(h^0x12u)*4.0f;
+        float sz=7.0f + m95Rand01(h^0x34u)*4.0f;
+        float sy=7.0f + m95Rand01(h^0x56u)*18.0f;
+
+        float x=x0+lotX[i]+m95LotOffset(h^0x78u,1.25f);
+        float z=z0+lotZ[i]+m95LotOffset(h^0x9au,1.25f);
+
+        // Keep footprints inside their world cell and reject overlap.
+        const float margin=3.0f;
+        float minX=x0+margin+sx*.5f, maxX=x0+cell-margin-sx*.5f;
+        float minZ=z0+margin+sz*.5f, maxZ=z0+cell-margin-sz*.5f;
+        if(x<minX)x=minX; if(x>maxX)x=maxX;
+        if(z<minZ)z=minZ; if(z>maxZ)z=maxZ;
+
+        if(!m95CanPlace(placed,placedCount,x,z,sx,sz)) continue;
+
+        placed[placedCount++]={x,z,sx,sz};
+
+        unsigned front=RGBA8(158+(h&31),160+((h>>5)&25),166+((h>>10)&24),255);
+        unsigned side =RGBA8(125+(h&25),128+((h>>6)&22),135+((h>>11)&20),255);
+        unsigned top  =RGBA8(188+(h&20),188+((h>>7)&20),192+((h>>13)&18),255);
+        bevelBuilding({x,0.0f,z},sx,sy,sz,cam,front,side,top);
+        m92WindowsRoundedFacade({x,0.0f,z},sx,sy,sz,cam);
+    }
 }
 
 void VitaRenderer::draw(const Player& player,
