@@ -1,0 +1,16 @@
+M91 Vita texture set (texture-ready)
+
+Recommended small indexed/optimized source textures:
+- asphalt_64.png       64x64
+- concrete_64.png      64x64
+- grass_64.png         64x64
+- brick_64.png         64x64
+- windows_64.png       64x64
+- roof_64.png          64x64
+
+M91 renderer adds the 3D geometry and NPC/AI layer first.
+Do not load PNGs directly every frame. Decode once at startup / streamed asset load,
+reuse GPU textures, and release them when the streamed region unloads.
+
+The current M91 ZIP intentionally remains build-compatible with the working M90
+renderer without introducing an untested image decoder dependency.
