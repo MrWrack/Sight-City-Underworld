@@ -201,25 +201,9 @@ void simpleWindowsFront(const Vec3& c,float sx,float sy,float sz,
 
 void cityBuilding(const Vec3& c,float sx,float sy,float sz,
                   const Camera& cam,unsigned front,unsigned side,unsigned top) {
-    boxPool(c,sx,sy,sz,cam,front,side,top);
-
-    // Simple GPU-cheap windows. Still pure geometry: no images or textures.
-    simpleWindowsFront(
-        c,sx,sy,sz,cam,
-        static_cast<unsigned>(RGBA8(62,91,112,255))
-    );
-
-    // Small rooftop block on taller buildings.
-    if (sy >= 11.0f) {
-        boxPool(
-            {c.x+sx*0.12f,c.y+sy,c.z-sz*0.08f},
-            sx*0.28f,0.75f,sz*0.24f,
-            cam,
-            static_cast<unsigned>(RGBA8(112,113,116,255)),
-            static_cast<unsigned>(RGBA8(82,84,87,255)),
-            static_cast<unsigned>(RGBA8(143,144,146,255))
-        );
-    }
+    // M92: beveled / faceted building replaces the old plain box silhouette.
+    bevelBuilding(c,sx,sy,sz,cam,front,side,top);
+    m92WindowsRoundedFacade(c,sx,sy,sz,cam);
 }
 
 void drawExpandedBuildings(const Camera& cam) {
@@ -520,6 +504,222 @@ void drawM90FullMapStream(const Camera& cam) {
 }
 
 
+
+// -----------------------------------------------------------------------------
+// M92 REAL-3D WORLD / CANONICAL MAP PASS
+// Removes the obvious cube-only look by using beveled / multi-sided geometry,
+// sloped terrain and region-aware streamed scenery.
+// -----------------------------------------------------------------------------
+enum class M92Region {
+    MountRidge, NorthCountryside, PineValley, EastCoast,
+    Riverside, Lakeside, Downtown, WestSuburbs, EastSuburbs,
+    Industrial, Airport, Farmland, WestCoast, SouthHills,
+    DesertPlains, Port
+};
+
+static M92Region m92Region(float x,float z) {
+    // Canonical 120x120 km Sight City layout, normalized to map coordinates.
+    const float nx=(x+60000.0f)/120000.0f;
+    const float nz=(z+60000.0f)/120000.0f;
+
+    if(nz < 0.18f) {
+        if(nx < 0.32f) return M92Region::MountRidge;
+        if(nx < 0.67f) return M92Region::NorthCountryside;
+        return M92Region::PineValley;
+    }
+    if(nz < 0.38f) {
+        if(nx < 0.20f) return M92Region::Riverside;
+        if(nx < 0.63f) return M92Region::Lakeside;
+        return M92Region::EastCoast;
+    }
+    if(nz < 0.64f) {
+        if(nx < 0.30f) return M92Region::WestSuburbs;
+        if(nx < 0.56f) return M92Region::Downtown;
+        if(nx < 0.78f) return M92Region::EastSuburbs;
+        return M92Region::Industrial;
+    }
+    if(nz < 0.82f) {
+        if(nx < 0.32f) return M92Region::Farmland;
+        if(nx < 0.58f) return M92Region::SouthHills;
+        if(nx < 0.78f) return M92Region::Airport;
+        return M92Region::DesertPlains;
+    }
+    if(nx < 0.36f) return M92Region::WestCoast;
+    if(nx < 0.68f) return M92Region::SouthHills;
+    if(nx < 0.83f) return M92Region::DesertPlains;
+    return M92Region::Port;
+}
+
+static float m92MountainHeight(float x,float z) {
+    const M92Region r=m92Region(x,z);
+    float h=0.0f;
+
+    // Large mountain masses: Mount Ridge reaches roughly 1,800 m in world data.
+    if(r==M92Region::MountRidge) {
+        const float cx=-43000.0f, cz=-45500.0f;
+        const float dx=(x-cx)/15500.0f, dz=(z-cz)/14500.0f;
+        const float d=dx*dx+dz*dz;
+        if(d<1.0f) h += (1.0f-d)*1800.0f;
+        h += 120.0f*std::sin(x*0.0011f)*std::cos(z*0.0013f);
+    } else if(r==M92Region::SouthHills) {
+        const float cx=0.0f, cz=36000.0f;
+        const float dx=(x-cx)/23000.0f, dz=(z-cz)/13000.0f;
+        const float d=dx*dx+dz*dz;
+        if(d<1.0f) h += (1.0f-d)*700.0f;
+        h += 55.0f*std::sin(x*0.0015f+z*0.0007f);
+    } else if(r==M92Region::PineValley || r==M92Region::NorthCountryside) {
+        h += 45.0f + 35.0f*std::sin(x*0.0012f)*std::sin(z*0.0010f);
+    }
+    return h<0.0f?0.0f:h;
+}
+
+static unsigned m92TerrainColor(M92Region r,float h) {
+    if(r==M92Region::DesertPlains) return static_cast<unsigned>(RGBA8(168,145,95,255));
+    if(r==M92Region::WestCoast || r==M92Region::EastCoast) return static_cast<unsigned>(RGBA8(112,132,83,255));
+    if(r==M92Region::Industrial || r==M92Region::Port || r==M92Region::Airport)
+        return static_cast<unsigned>(RGBA8(100,103,98,255));
+    if(r==M92Region::MountRidge && h>1100.0f) return static_cast<unsigned>(RGBA8(210,214,213,255));
+    if(r==M92Region::MountRidge && h>500.0f) return static_cast<unsigned>(RGBA8(103,106,100,255));
+    return static_cast<unsigned>(RGBA8(75,112,68,255));
+}
+
+static void prismPool(const Vec3& c,float radius,float sy,int sides,
+                      const Camera& cam,unsigned wallA,unsigned wallB,unsigned top) {
+    if(sides<5) sides=5;
+    if(sides>10) sides=10;
+    Vec3 ring0[10], ring1[10];
+    for(int i=0;i<sides;i++) {
+        const float a=6.283185307f*float(i)/float(sides);
+        ring0[i]={c.x+std::cos(a)*radius,c.y,c.z+std::sin(a)*radius};
+        ring1[i]={ring0[i].x,c.y+sy,ring0[i].z};
+    }
+    for(int i=0;i<sides;i++) {
+        const int j=(i+1)%sides;
+        quadPool(ring0[i],ring0[j],ring1[j],ring1[i],cam,(i&1)?wallA:wallB);
+        quadPool({c.x,c.y+sy,c.z},ring1[i],ring1[j],{c.x,c.y+sy,c.z},cam,top);
+    }
+}
+
+static void bevelBuilding(const Vec3& c,float sx,float sy,float sz,
+                          const Camera& cam,unsigned front,unsigned side,unsigned top) {
+    // Beveled octagonal footprint instead of a rectangular Minecraft-like box.
+    const float bx=sx*0.16f, bz=sz*0.16f;
+    const float x0=c.x-sx*0.5f, x1=c.x+sx*0.5f;
+    const float z0=c.z-sz*0.5f, z1=c.z+sz*0.5f;
+    Vec3 p[8]={
+        {x0+bx,c.y,z0},{x1-bx,c.y,z0},{x1,c.y,z0+bz},{x1,c.y,z1-bz},
+        {x1-bx,c.y,z1},{x0+bx,c.y,z1},{x0,c.y,z1-bz},{x0,c.y,z0+bz}
+    };
+    Vec3 q[8];
+    for(int i=0;i<8;i++) q[i]={p[i].x,c.y+sy,p[i].z};
+
+    for(int i=0;i<8;i++) {
+        const int j=(i+1)&7;
+        quadPool(p[i],p[j],q[j],q[i],cam,(i&1)?side:front);
+    }
+    for(int i=1;i<7;i++)
+        quadPool(q[0],q[i],q[i+1],q[0],cam,top);
+
+    // Sloped / stepped roof silhouette.
+    if(sy>8.0f) {
+        const unsigned roofDark=static_cast<unsigned>(RGBA8(75,78,81,255));
+        prismPool({c.x,c.y+sy,c.z},sx*0.23f,0.55f,8,cam,roofDark,top,top);
+    }
+}
+
+static void m92WindowsRoundedFacade(const Vec3& c,float sx,float sy,float sz,const Camera& cam) {
+    const unsigned glass=static_cast<unsigned>(RGBA8(72,111,133,255));
+    const unsigned frame=static_cast<unsigned>(RGBA8(48,52,55,255));
+    const float z=c.z-sz*0.5f-0.025f;
+    const int floors=(int)(sy/2.8f);
+    for(int f=0;f<floors && f<8;f++) {
+        const float y=c.y+1.4f+f*2.5f;
+        for(int w=-1;w<=1;w++) {
+            const float x=c.x+w*sx*0.24f;
+            quadPool({x-0.55f,y,z},{x+0.55f,y,z},{x+0.55f,y+0.75f,z},{x-0.55f,y+0.75f,z},cam,glass);
+            quadPool({x-0.62f,y-0.06f,z-0.01f},{x+0.62f,y-0.06f,z-0.01f},
+                     {x+0.62f,y,z-0.01f},{x-0.62f,y,z-0.01f},cam,frame);
+        }
+    }
+}
+
+static void m92ModernBuilding(const Vec3& c,float sx,float sy,float sz,const Camera& cam,
+                              unsigned a,unsigned b,unsigned top) {
+    bevelBuilding(c,sx,sy,sz,cam,a,b,top);
+    m92WindowsRoundedFacade(c,sx,sy,sz,cam);
+
+    // Recessed entrance + canopy.
+    const unsigned door=static_cast<unsigned>(RGBA8(52,61,66,255));
+    const unsigned trim=static_cast<unsigned>(RGBA8(96,101,104,255));
+    quadPool({c.x-0.9f,c.y,c.z-sz*0.5f-0.04f},{c.x+0.9f,c.y,c.z-sz*0.5f-0.04f},
+             {c.x+0.9f,c.y+2.2f,c.z-sz*0.5f-0.04f},{c.x-0.9f,c.y+2.2f,c.z-sz*0.5f-0.04f},cam,door);
+    quadPool({c.x-1.7f,c.y+2.25f,c.z-sz*0.5f-0.55f},{c.x+1.7f,c.y+2.25f,c.z-sz*0.5f-0.55f},
+             {c.x+1.7f,c.y+2.25f,c.z-sz*0.5f+0.15f},{c.x-1.7f,c.y+2.25f,c.z-sz*0.5f+0.15f},cam,trim);
+}
+
+static void m92TerrainPatch(float x0,float z0,float size,const Camera& cam) {
+    const int N=4;
+    const float step=size/float(N);
+    for(int iz=0;iz<N;iz++) for(int ix=0;ix<N;ix++) {
+        const float xa=x0+ix*step, xb=xa+step;
+        const float za=z0+iz*step, zb=za+step;
+        const float h00=m92MountainHeight(xa,za);
+        const float h10=m92MountainHeight(xb,za);
+        const float h11=m92MountainHeight(xb,zb);
+        const float h01=m92MountainHeight(xa,zb);
+        const M92Region r=m92Region(xa+step*0.5f,za+step*0.5f);
+        const unsigned col=m92TerrainColor(r,(h00+h10+h11+h01)*0.25f);
+        quadPool({xa,h00,za},{xb,h10,za},{xb,h11,zb},{xa,h01,zb},cam,col);
+    }
+}
+
+static void m92MountainsNearCamera(const Camera& cam) {
+    // 5x5 terrain patches around camera; keeps mountain geometry streamed.
+    const float P=128.0f;
+    const int cx=(int)std::floor(cam.position.x/P);
+    const int cz=(int)std::floor(cam.position.z/P);
+    for(int dz=-2;dz<=2;dz++) for(int dx=-2;dx<=2;dx++) {
+        const float x0=float(cx+dx)*P;
+        const float z0=float(cz+dz)*P;
+        m92TerrainPatch(x0,z0,P,cam);
+    }
+}
+
+static void m92CanonicalLandmarks(const Camera& cam) {
+    // Region-specific silhouettes make the full map read as the planned map.
+    const M92Region r=m92Region(cam.position.x,cam.position.z);
+    const float x=cam.position.x, z=cam.position.z;
+
+    if(r==M92Region::Downtown) {
+        m92ModernBuilding({x-22,0,z+42},15,32,15,cam,
+            static_cast<unsigned>(RGBA8(137,142,147,255)),
+            static_cast<unsigned>(RGBA8(97,103,109,255)),
+            static_cast<unsigned>(RGBA8(170,175,179,255)));
+        m92ModernBuilding({x+24,0,z+48},18,45,18,cam,
+            static_cast<unsigned>(RGBA8(129,136,143,255)),
+            static_cast<unsigned>(RGBA8(90,98,106,255)),
+            static_cast<unsigned>(RGBA8(159,166,173,255)));
+    } else if(r==M92Region::Industrial || r==M92Region::Port) {
+        prismPool({x-18,0,z+38},5.0f,13.0f,10,cam,
+            static_cast<unsigned>(RGBA8(112,115,115,255)),
+            static_cast<unsigned>(RGBA8(82,85,86,255)),
+            static_cast<unsigned>(RGBA8(145,146,144,255)));
+        prismPool({x+18,0,z+45},6.0f,10.0f,10,cam,
+            static_cast<unsigned>(RGBA8(126,120,105,255)),
+            static_cast<unsigned>(RGBA8(91,87,77,255)),
+            static_cast<unsigned>(RGBA8(151,145,129,255)));
+    } else if(r==M92Region::WestSuburbs || r==M92Region::EastSuburbs) {
+        // Low houses with pitched roofs made from triangles/quads, not cubes alone.
+        const unsigned wall=static_cast<unsigned>(RGBA8(172,160,145,255));
+        const unsigned side=static_cast<unsigned>(RGBA8(132,120,108,255));
+        const unsigned roof=static_cast<unsigned>(RGBA8(92,75,65,255));
+        bevelBuilding({x-15,0,z+28},10,5.5f,12,cam,wall,side,wall);
+        quadPool({x-20,5.5f,z+22},{x-10,5.5f,z+22},{x-15,8.2f,z+28},{x-15,8.2f,z+28},cam,roof);
+        quadPool({x-10,5.5f,z+34},{x-20,5.5f,z+34},{x-15,8.2f,z+28},{x-15,8.2f,z+28},cam,roof);
+    }
+}
+
+
 // -----------------------------------------------------------------------------
 // M91 VISUAL + NPC AI PASS
 // Original Vita target: geometry detail is distance-limited and NPC count capped.
@@ -583,17 +783,18 @@ static void m91UpdateNpcs(const Camera& cam,float dt) {
 }
 
 static void m91DrawNpc(const M91Npc& n,const Camera& cam) {
-    // Small 3D person made from boxes: legs, torso, arms, head.
-    const unsigned jeans=static_cast<unsigned>(RGBA8(52,64,82,255));
-    const unsigned shirt=static_cast<unsigned>(RGBA8(124,55,52,255));
+    const unsigned jeans=static_cast<unsigned>(RGBA8(48,60,78,255));
+    const unsigned shirt=static_cast<unsigned>(RGBA8(116,52,50,255));
     const unsigned skin=static_cast<unsigned>(RGBA8(190,151,118,255));
-    const unsigned dark=static_cast<unsigned>(RGBA8(44,42,40,255));
-    boxPool({n.p.x-0.16f,n.p.y,n.p.z},0.20f,0.82f,0.22f,cam,jeans,jeans,jeans);
-    boxPool({n.p.x+0.16f,n.p.y,n.p.z},0.20f,0.82f,0.22f,cam,jeans,jeans,jeans);
-    boxPool({n.p.x,n.p.y+0.78f,n.p.z},0.68f,0.82f,0.32f,cam,shirt,shirt,shirt);
-    boxPool({n.p.x-0.43f,n.p.y+0.84f,n.p.z},0.14f,0.72f,0.16f,cam,skin,skin,skin);
-    boxPool({n.p.x+0.43f,n.p.y+0.84f,n.p.z},0.14f,0.72f,0.16f,cam,skin,skin,skin);
-    boxPool({n.p.x,n.p.y+1.62f,n.p.z},0.42f,0.42f,0.40f,cam,skin,skin,dark);
+    const unsigned hair=static_cast<unsigned>(RGBA8(48,39,34,255));
+
+    // Slim limbs + faceted torso/head give a much less block-like silhouette.
+    prismPool({n.p.x-0.14f,n.p.y,n.p.z},0.11f,0.78f,6,cam,jeans,jeans,jeans);
+    prismPool({n.p.x+0.14f,n.p.y,n.p.z},0.11f,0.78f,6,cam,jeans,jeans,jeans);
+    prismPool({n.p.x,n.p.y+0.72f,n.p.z},0.36f,0.82f,8,cam,shirt,shirt,shirt);
+    prismPool({n.p.x-0.39f,n.p.y+0.78f,n.p.z},0.075f,0.68f,6,cam,skin,skin,skin);
+    prismPool({n.p.x+0.39f,n.p.y+0.78f,n.p.z},0.075f,0.68f,6,cam,skin,skin,skin);
+    prismPool({n.p.x,n.p.y+1.48f,n.p.z},0.25f,0.42f,8,cam,skin,skin,hair);
 }
 
 static void m91DrawNpcs(const Camera& cam) {
@@ -660,6 +861,9 @@ void drawTestCity(const Camera& cam) {
     }
 
     m91Frame(cam);
+
+    m92MountainsNearCamera(cam);
+    m92CanonicalLandmarks(cam);
 }
 
 } // namespace
