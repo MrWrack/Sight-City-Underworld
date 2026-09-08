@@ -853,6 +853,56 @@ static void m91Frame(const Camera& cam) {
         m91DetailedBlock(cam);
 }
 
+
+// M96 fixed map scenery -------------------------------------------------------
+// These mountains are VISUAL landmarks anchored to fixed world coordinates.
+// They never use cam.position as their world position, so they cannot follow Dash.
+// Walkable ground remains the collision/world ground; this avoids visual ground
+// lifting under the player and making Dash look like he is floating.
+static void m96MountainPeak(const Vec3& base,float radius,float height,const Camera& cam,
+                            unsigned low,unsigned high) {
+    const int sides=10;
+    Vec3 ring[sides];
+    for(int i=0;i<sides;i++) {
+        const float a=6.28318530718f*float(i)/float(sides);
+        ring[i]={base.x+std::cos(a)*radius,base.y,base.z+std::sin(a)*radius};
+    }
+    const Vec3 top={base.x,base.y+height,base.z};
+    for(int i=0;i<sides;i++) {
+        const int j=(i+1)%sides;
+        triPool(ring[i],ring[j],top,cam,(i&1)?low:high);
+    }
+}
+
+static void m96FixedMountainScenery(const Camera& cam) {
+    const unsigned rockA=static_cast<unsigned>(RGBA8(88,92,86,255));
+    const unsigned rockB=static_cast<unsigned>(RGBA8(108,111,103,255));
+    const unsigned snowA=static_cast<unsigned>(RGBA8(204,210,210,255));
+    const unsigned hillA=static_cast<unsigned>(RGBA8(82,106,70,255));
+
+    // Mount Ridge: expanded fixed range in the canonical north-west.
+    // Draw only when reasonably near the range to protect original Vita FPS.
+    const float dx=cam.position.x+43000.0f;
+    const float dz=cam.position.z+45500.0f;
+    if(dx*dx+dz*dz < 18000.0f*18000.0f) {
+        m96MountainPeak({-50000.0f,0.0f,-49000.0f},3600.0f,1450.0f,cam,rockA,rockB);
+        m96MountainPeak({-45500.0f,0.0f,-47000.0f},4300.0f,1800.0f,cam,rockA,snowA);
+        m96MountainPeak({-40500.0f,0.0f,-46500.0f},3500.0f,1320.0f,cam,rockA,rockB);
+        m96MountainPeak({-36500.0f,0.0f,-44000.0f},2900.0f,1050.0f,cam,rockA,rockB);
+        m96MountainPeak({-48500.0f,0.0f,-42000.0f},3000.0f,980.0f,cam,rockA,rockB);
+        m96MountainPeak({-42500.0f,0.0f,-41000.0f},2600.0f,850.0f,cam,rockA,rockB);
+    }
+
+    // South Hills remains a lower fixed range.
+    const float sx=cam.position.x;
+    const float sz=cam.position.z-36000.0f;
+    if(sx*sx+sz*sz < 15000.0f*15000.0f) {
+        m96MountainPeak({-6500.0f,0.0f,35000.0f},3000.0f,620.0f,cam,hillA,rockB);
+        m96MountainPeak({0.0f,0.0f,37500.0f},3600.0f,700.0f,cam,hillA,rockB);
+        m96MountainPeak({6500.0f,0.0f,35500.0f},2800.0f,540.0f,cam,hillA,rockB);
+    }
+}
+
 void drawTestCity(const Camera& cam) {
     // Full 120 x 120 km world through streaming.
     drawM90FullMapStream(cam);
@@ -872,8 +922,10 @@ void drawTestCity(const Camera& cam) {
 
     m91Frame(cam);
 
-    m92MountainsNearCamera(cam);
-    m92CanonicalLandmarks(cam);
+    // M96: REMOVED camera-following terrain/landmarks.
+    // They made scenery appear to move with the camera and the visual terrain
+    // did not match gameplay collision height.
+    m96FixedMountainScenery(cam);
 }
 
 } // namespace

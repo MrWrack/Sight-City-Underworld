@@ -76,6 +76,8 @@ int main() {
     settings.load(settingsPath);
 
     const float dt=1.0f/30.0f; // Vita target: stable 30 fps.
+    bool m96InitialGroundSnap=false;
+    bool m96WasFlyMode=false;
     while(!controls.quitRequested()) {
         // Temporary developer menu. SELECT opens/closes it.
         if(devMenu.update(player,car,wanted,environment,collisions)) {
@@ -125,6 +127,19 @@ int main() {
         environment.stream(preFocus,3);
         sightMap.stream(preFocus,3);
         collisions.rebuild(environment,sightMap);
+
+        // M96: put Dash on the REAL collision floor on first playable frame.
+        // Also snap safely back to the floor when Fly Mode is turned OFF.
+        const bool m96FlyNow=devMenu.flyMode();
+        if(!player.inVehicle && !m96FlyNow &&
+           (!m96InitialGroundSnap || m96WasFlyMode)) {
+            player.position.y=collisions.groundHeight(
+                player.position.x,player.position.z,environment);
+            player.velocity={0.0f,0.0f,0.0f};
+            m96InitialGroundSnap=true;
+        }
+        m96WasFlyMode=m96FlyNow;
+
         if(!devMenu.flyMode()) {
             if(!player.inVehicle) {
                 // M84: movement uses the actual camera forward/right vectors.
