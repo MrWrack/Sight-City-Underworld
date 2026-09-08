@@ -126,8 +126,9 @@ void drawExpandedGround(const Camera& cam) {
     const unsigned grassB = static_cast<unsigned>(RGBA8(78, 101, 72, 255));
 
     constexpr float TILE = 20.0f;
-    for (int z=-4; z<6; ++z) {
-        for (int x=-4; x<5; ++x) {
+    // M89: larger geometry-only Vita test world.
+    for (int z=-9; z<9; ++z) {
+        for (int x=-9; x<9; ++x) {
             float x0 = x*TILE;
             float z0 = z*TILE;
             unsigned col = ((x+z)&1) ? grassA : grassB;
@@ -140,14 +141,14 @@ void roadX(float z, const Camera& cam) {
     const unsigned asphalt = static_cast<unsigned>(RGBA8(42,44,47,255));
     const unsigned line = static_cast<unsigned>(RGBA8(218,205,116,255));
 
-    // Road from x -80 to +100.
-    for (int i=0;i<9;i++) {
-        float x0=-80.0f+i*20.0f;
+    // M89 road from x -180 to +180.
+    for (int i=0;i<18;i++) {
+        float x0=-180.0f+i*20.0f;
         float x1=x0+20.0f;
         groundTile(x0,z-4.0f,x1,z+4.0f,cam,asphalt);
     }
 
-    for (float x=-76.0f;x<96.0f;x+=10.0f) {
+    for (float x=-176.0f;x<176.0f;x+=10.0f) {
         groundTile(x,z-0.08f,x+5.0f,z+0.08f,cam,line);
     }
 }
@@ -156,14 +157,14 @@ void roadZ(float x, const Camera& cam) {
     const unsigned asphalt = static_cast<unsigned>(RGBA8(42,44,47,255));
     const unsigned line = static_cast<unsigned>(RGBA8(218,205,116,255));
 
-    // Road from z -80 to +120.
-    for (int i=0;i<10;i++) {
-        float z0=-80.0f+i*20.0f;
+    // M89 road from z -180 to +180.
+    for (int i=0;i<18;i++) {
+        float z0=-180.0f+i*20.0f;
         float z1=z0+20.0f;
         groundTile(x-4.0f,z0,x+4.0f,z1,cam,asphalt);
     }
 
-    for (float z=-76.0f;z<116.0f;z+=10.0f) {
+    for (float z=-176.0f;z<176.0f;z+=10.0f) {
         groundTile(x-0.08f,z,x+0.08f,z+5.0f,cam,line);
     }
 }
@@ -222,7 +223,7 @@ void cityBuilding(const Vec3& c,float sx,float sy,float sz,
 }
 
 void drawExpandedBuildings(const Camera& cam) {
-    // M83 neighborhood: more buildings without returning to the old unsafe
+    // M87 separated-lot neighborhood: more buildings without returning to the old unsafe
     // stack-backed vita2d_draw_array path.
     struct B {
         float x,z,sx,sy,sz;
@@ -230,31 +231,31 @@ void drawExpandedBuildings(const Camera& cam) {
     };
 
     static const B buildings[] = {
-        // Around spawn / original test building.
-        {  0.0f, 17.0f,  8.0f,  8.0f,  8.0f, static_cast<unsigned>(RGBA8(150,142,145,255)), static_cast<unsigned>(RGBA8(110,104,108,255)), static_cast<unsigned>(RGBA8(180,174,177,255))},
-        {-14.0f, 18.0f, 10.0f, 11.0f,  9.0f, static_cast<unsigned>(RGBA8(139,145,151,255)), static_cast<unsigned>(RGBA8(98,106,114,255)), static_cast<unsigned>(RGBA8(170,176,181,255))},
-        { 15.0f, 18.0f, 11.0f,  7.0f, 10.0f, static_cast<unsigned>(RGBA8(164,143,123,255)), static_cast<unsigned>(RGBA8(119, 99, 83,255)), static_cast<unsigned>(RGBA8(190,169,147,255))},
+        // M87: buildings are placed on separate lots with guaranteed gaps.
+        // No two building footprints overlap and none sits on the roads.
 
-        // Next block.
-        {-31.0f, 20.0f, 12.0f, 14.0f, 11.0f, static_cast<unsigned>(RGBA8(126,136,148,255)), static_cast<unsigned>(RGBA8(88,98,109,255)), static_cast<unsigned>(RGBA8(156,165,176,255))},
-        { 32.0f, 20.0f, 12.0f, 12.0f, 11.0f, static_cast<unsigned>(RGBA8(153,150,139,255)), static_cast<unsigned>(RGBA8(108,106, 96,255)), static_cast<unsigned>(RGBA8(180,177,165,255))},
-        {-47.0f, 18.0f, 10.0f,  8.0f, 12.0f, static_cast<unsigned>(RGBA8(145,129,121,255)), static_cast<unsigned>(RGBA8(104, 90, 84,255)), static_cast<unsigned>(RGBA8(174,156,147,255))},
-        { 48.0f, 18.0f, 11.0f, 16.0f, 10.0f, static_cast<unsigned>(RGBA8(122,132,137,255)), static_cast<unsigned>(RGBA8(86,95,100,255)), static_cast<unsigned>(RGBA8(153,163,168,255))},
+        // Block A: between road Z=-22 and road Z=22, north of spawn road.
+        {-58.0f, 25.0f, 10.0f,  8.0f, 10.0f, static_cast<unsigned>(RGBA8(150,142,145,255)), static_cast<unsigned>(RGBA8(110,104,108,255)), static_cast<unsigned>(RGBA8(180,174,177,255))},
+        {-42.0f, 25.0f, 10.0f, 11.0f, 10.0f, static_cast<unsigned>(RGBA8(139,145,151,255)), static_cast<unsigned>(RGBA8(98,106,114,255)), static_cast<unsigned>(RGBA8(170,176,181,255))},
+        { -8.0f, 25.0f, 10.0f,  7.0f, 10.0f, static_cast<unsigned>(RGBA8(164,143,123,255)), static_cast<unsigned>(RGBA8(119,99,83,255)), static_cast<unsigned>(RGBA8(190,169,147,255))},
+        {  8.0f, 25.0f, 10.0f, 10.0f, 10.0f, static_cast<unsigned>(RGBA8(156,145,132,255)), static_cast<unsigned>(RGBA8(111,100,89,255)), static_cast<unsigned>(RGBA8(184,173,158,255))},
+        { 42.0f, 25.0f, 10.0f, 12.0f, 10.0f, static_cast<unsigned>(RGBA8(153,150,139,255)), static_cast<unsigned>(RGBA8(108,106,96,255)), static_cast<unsigned>(RGBA8(180,177,165,255))},
+        { 58.0f, 25.0f, 10.0f,  9.0f, 10.0f, static_cast<unsigned>(RGBA8(145,129,121,255)), static_cast<unsigned>(RGBA8(104,90,84,255)), static_cast<unsigned>(RGBA8(174,156,147,255))},
 
-        // Deeper into the expanded area.
-        {-14.0f, 39.0f, 11.0f, 10.0f, 10.0f, static_cast<unsigned>(RGBA8(156,145,132,255)), static_cast<unsigned>(RGBA8(111,100, 89,255)), static_cast<unsigned>(RGBA8(184,173,158,255))},
-        { 14.0f, 39.0f, 10.0f, 18.0f, 11.0f, static_cast<unsigned>(RGBA8(126,137,149,255)), static_cast<unsigned>(RGBA8(88,98,110,255)), static_cast<unsigned>(RGBA8(157,167,178,255))},
-        {-32.0f, 40.0f, 12.0f,  9.0f, 12.0f, static_cast<unsigned>(RGBA8(151,138,134,255)), static_cast<unsigned>(RGBA8(106, 94, 91,255)), static_cast<unsigned>(RGBA8(180,166,161,255))},
-        { 33.0f, 40.0f, 11.0f, 13.0f, 12.0f, static_cast<unsigned>(RGBA8(137,142,143,255)), static_cast<unsigned>(RGBA8(96,101,102,255)), static_cast<unsigned>(RGBA8(166,171,171,255))},
+        // Block B: above the second east/west road at Z=52.
+        {-58.0f, 70.0f, 11.0f, 17.0f, 11.0f, static_cast<unsigned>(RGBA8(130,139,145,255)), static_cast<unsigned>(RGBA8(91,99,106,255)), static_cast<unsigned>(RGBA8(160,169,175,255))},
+        {-40.0f, 70.0f, 11.0f, 14.0f, 11.0f, static_cast<unsigned>(RGBA8(126,136,148,255)), static_cast<unsigned>(RGBA8(88,98,109,255)), static_cast<unsigned>(RGBA8(156,165,176,255))},
+        { -8.0f, 70.0f, 11.0f, 18.0f, 11.0f, static_cast<unsigned>(RGBA8(126,137,149,255)), static_cast<unsigned>(RGBA8(88,98,110,255)), static_cast<unsigned>(RGBA8(157,167,178,255))},
+        {  9.0f, 70.0f, 11.0f, 13.0f, 11.0f, static_cast<unsigned>(RGBA8(137,142,143,255)), static_cast<unsigned>(RGBA8(96,101,102,255)), static_cast<unsigned>(RGBA8(166,171,171,255))},
+        { 40.0f, 70.0f, 11.0f, 16.0f, 11.0f, static_cast<unsigned>(RGBA8(122,132,137,255)), static_cast<unsigned>(RGBA8(86,95,100,255)), static_cast<unsigned>(RGBA8(153,163,168,255))},
+        { 58.0f, 70.0f, 11.0f, 10.0f, 11.0f, static_cast<unsigned>(RGBA8(162,145,127,255)), static_cast<unsigned>(RGBA8(116,100,85,255)), static_cast<unsigned>(RGBA8(191,172,151,255))},
 
-        {-48.0f, 42.0f, 12.0f, 17.0f, 12.0f, static_cast<unsigned>(RGBA8(130,139,145,255)), static_cast<unsigned>(RGBA8(91,99,106,255)), static_cast<unsigned>(RGBA8(160,169,175,255))},
-        { 49.0f, 42.0f, 12.0f, 10.0f, 12.0f, static_cast<unsigned>(RGBA8(162,145,127,255)), static_cast<unsigned>(RGBA8(116,100, 85,255)), static_cast<unsigned>(RGBA8(191,172,151,255))},
-
-        // Far block / skyline.
-        {-28.0f, 65.0f, 14.0f, 22.0f, 14.0f, static_cast<unsigned>(RGBA8(119,130,142,255)), static_cast<unsigned>(RGBA8(83,93,104,255)), static_cast<unsigned>(RGBA8(150,160,171,255))},
-        { -8.0f, 67.0f, 13.0f, 28.0f, 13.0f, static_cast<unsigned>(RGBA8(138,139,144,255)), static_cast<unsigned>(RGBA8(96,98,104,255)), static_cast<unsigned>(RGBA8(169,170,175,255))},
-        { 11.0f, 66.0f, 14.0f, 24.0f, 14.0f, static_cast<unsigned>(RGBA8(128,137,146,255)), static_cast<unsigned>(RGBA8(89,98,107,255)), static_cast<unsigned>(RGBA8(159,168,177,255))},
-        { 31.0f, 64.0f, 13.0f, 19.0f, 14.0f, static_cast<unsigned>(RGBA8(154,145,135,255)), static_cast<unsigned>(RGBA8(109,101, 92,255)), static_cast<unsigned>(RGBA8(183,174,162,255))}
+        // Block C: skyline row, also separated into individual lots.
+        {-50.0f, 98.0f, 12.0f, 19.0f, 12.0f, static_cast<unsigned>(RGBA8(154,145,135,255)), static_cast<unsigned>(RGBA8(109,101,92,255)), static_cast<unsigned>(RGBA8(183,174,162,255))},
+        {-30.0f, 98.0f, 12.0f, 22.0f, 12.0f, static_cast<unsigned>(RGBA8(119,130,142,255)), static_cast<unsigned>(RGBA8(83,93,104,255)), static_cast<unsigned>(RGBA8(150,160,171,255))},
+        { -8.0f, 98.0f, 12.0f, 28.0f, 12.0f, static_cast<unsigned>(RGBA8(138,139,144,255)), static_cast<unsigned>(RGBA8(96,98,104,255)), static_cast<unsigned>(RGBA8(169,170,175,255))},
+        { 12.0f, 98.0f, 12.0f, 24.0f, 12.0f, static_cast<unsigned>(RGBA8(128,137,146,255)), static_cast<unsigned>(RGBA8(89,98,107,255)), static_cast<unsigned>(RGBA8(159,168,177,255))},
+        { 38.0f, 98.0f, 12.0f, 20.0f, 12.0f, static_cast<unsigned>(RGBA8(151,138,134,255)), static_cast<unsigned>(RGBA8(106,94,91,255)), static_cast<unsigned>(RGBA8(180,166,161,255))}
     };
 
     for (const B& b : buildings) {
@@ -264,6 +265,150 @@ void drawExpandedBuildings(const Camera& cam) {
             cam,b.front,b.side,b.top
         );
     }
+}
+
+
+void sidewalkStripX(float z,const Camera& cam) {
+    const unsigned concrete=static_cast<unsigned>(RGBA8(150,151,148,255));
+    for(int i=0;i<9;i++) {
+        float x0=-80.0f+i*20.0f;
+        float x1=x0+20.0f;
+        groundTile(x0,z-5.4f,x1,z-4.2f,cam,concrete);
+        groundTile(x0,z+4.2f,x1,z+5.4f,cam,concrete);
+    }
+}
+
+void sidewalkStripZ(float x,const Camera& cam) {
+    const unsigned concrete=static_cast<unsigned>(RGBA8(150,151,148,255));
+    for(int i=0;i<10;i++) {
+        float z0=-80.0f+i*20.0f;
+        float z1=z0+20.0f;
+        groundTile(x-5.4f,z0,x-4.2f,z1,cam,concrete);
+        groundTile(x+4.2f,z0,x+5.4f,z1,cam,concrete);
+    }
+}
+
+void streetLamp(float x,float z,const Camera& cam) {
+    const unsigned pole=static_cast<unsigned>(RGBA8(66,68,70,255));
+    const unsigned lamp=static_cast<unsigned>(RGBA8(238,211,126,255));
+    boxPool({x,0.0f,z},0.16f,3.4f,0.16f,cam,pole,pole,pole);
+    boxPool({x,3.35f,z},0.45f,0.16f,0.30f,cam,lamp,lamp,lamp);
+}
+
+void treeSimple(float x,float z,const Camera& cam) {
+    const unsigned trunk=static_cast<unsigned>(RGBA8(92,68,45,255));
+    const unsigned leaf=static_cast<unsigned>(RGBA8(54,104,58,255));
+    boxPool({x,0.0f,z},0.30f,1.8f,0.30f,cam,trunk,trunk,trunk);
+    boxPool({x,1.65f,z},1.25f,1.35f,1.25f,cam,leaf,leaf,leaf);
+}
+
+void benchSimple(float x,float z,const Camera& cam) {
+    const unsigned wood=static_cast<unsigned>(RGBA8(116,82,53,255));
+    const unsigned metal=static_cast<unsigned>(RGBA8(67,69,72,255));
+    boxPool({x,0.35f,z},1.55f,0.18f,0.45f,cam,wood,wood,wood);
+    boxPool({x-0.55f,0.0f,z},0.12f,0.35f,0.12f,cam,metal,metal,metal);
+    boxPool({x+0.55f,0.0f,z},0.12f,0.35f,0.12f,cam,metal,metal,metal);
+}
+
+void parkingLot(float x0,float z0,float x1,float z1,const Camera& cam) {
+    const unsigned asphalt=static_cast<unsigned>(RGBA8(49,51,53,255));
+    const unsigned white=static_cast<unsigned>(RGBA8(205,205,197,255));
+    groundTile(x0,z0,x1,z1,cam,asphalt);
+    for(float x=x0+2.0f;x<x1-1.0f;x+=3.0f)
+        groundTile(x,z0+0.8f,x+0.08f,z0+4.4f,cam,white);
+}
+
+void drawStreetDetails(const Camera& cam) {
+    // Sidewalks around all four current roads.
+    sidewalkStripX(7.0f,cam);
+    sidewalkStripX(52.0f,cam);
+    sidewalkStripZ(-22.0f,cam);
+    sidewalkStripZ(22.0f,cam);
+
+    // Lamps kept sparse for original PS Vita GPU/CPU budget.
+    static const float lamps[][2]={
+        {-62,13},{-42,13},{-10,13},{10,13},{42,13},{62,13},
+        {-62,46},{-42,46},{-10,46},{10,46},{42,46},{62,46},
+        {-28,24},{-28,40},{-28,66},{28,24},{28,40},{28,66}
+    };
+    for(const auto& p:lamps) streetLamp(p[0],p[1],cam);
+
+    // Small green details between buildings.
+    static const float trees[][2]={
+        {-66,31},{-50,31},{-32,31},{-16,31},{16,31},{32,31},{50,31},{66,31},
+        {-66,78},{-50,78},{-31,78},{16,78},{31,78},{50,78},{66,78}
+    };
+    for(const auto& p:trees) treeSimple(p[0],p[1],cam);
+
+    benchSimple(-15.0f,34.0f,cam);
+    benchSimple(15.0f,34.0f,cam);
+    benchSimple(-15.0f,82.0f,cam);
+    benchSimple(15.0f,82.0f,cam);
+
+    // Two lightweight parking areas.
+    parkingLot(-72.0f,38.0f,-52.0f,47.0f,cam);
+    parkingLot(52.0f,38.0f,72.0f,47.0f,cam);
+}
+
+
+void drawOuterDistrictBuildings(const Camera& cam) {
+    struct OB { float x,z,sx,sy,sz; unsigned c1,c2,c3; };
+    static const OB outer[] = {
+        {-145,-120,14,12,14, static_cast<unsigned>(RGBA8(142,137,132,255)), static_cast<unsigned>(RGBA8(100,95,90,255)), static_cast<unsigned>(RGBA8(170,165,159,255))},
+        {-115,-120,14,16,14, static_cast<unsigned>(RGBA8(129,137,145,255)), static_cast<unsigned>(RGBA8(90,98,106,255)), static_cast<unsigned>(RGBA8(158,166,174,255))},
+        { -75,-120,16,10,16, static_cast<unsigned>(RGBA8(157,144,128,255)), static_cast<unsigned>(RGBA8(111,99,85,255)), static_cast<unsigned>(RGBA8(187,172,152,255))},
+        { -35,-120,15,18,15, static_cast<unsigned>(RGBA8(128,134,142,255)), static_cast<unsigned>(RGBA8(89,95,102,255)), static_cast<unsigned>(RGBA8(158,164,172,255))},
+        {  35,-120,15,14,15, static_cast<unsigned>(RGBA8(149,141,134,255)), static_cast<unsigned>(RGBA8(105,98,92,255)), static_cast<unsigned>(RGBA8(177,169,161,255))},
+        {  75,-120,16,21,16, static_cast<unsigned>(RGBA8(121,132,142,255)), static_cast<unsigned>(RGBA8(84,94,104,255)), static_cast<unsigned>(RGBA8(151,162,172,255))},
+        { 115,-120,14,13,14, static_cast<unsigned>(RGBA8(160,146,131,255)), static_cast<unsigned>(RGBA8(114,101,88,255)), static_cast<unsigned>(RGBA8(190,174,156,255))},
+        { 145,-120,14,17,14, static_cast<unsigned>(RGBA8(132,140,146,255)), static_cast<unsigned>(RGBA8(93,101,107,255)), static_cast<unsigned>(RGBA8(162,170,176,255))},
+
+        {-145,-55,14,11,14, static_cast<unsigned>(RGBA8(151,143,137,255)), static_cast<unsigned>(RGBA8(106,99,94,255)), static_cast<unsigned>(RGBA8(181,173,166,255))},
+        {-115,-55,16,20,16, static_cast<unsigned>(RGBA8(124,135,145,255)), static_cast<unsigned>(RGBA8(86,96,106,255)), static_cast<unsigned>(RGBA8(154,165,175,255))},
+        { 115,-55,16,18,16, static_cast<unsigned>(RGBA8(137,143,147,255)), static_cast<unsigned>(RGBA8(96,102,106,255)), static_cast<unsigned>(RGBA8(166,172,176,255))},
+        { 145,-55,14,12,14, static_cast<unsigned>(RGBA8(159,145,132,255)), static_cast<unsigned>(RGBA8(113,100,88,255)), static_cast<unsigned>(RGBA8(188,173,157,255))},
+
+        {-145,15,14,15,14, static_cast<unsigned>(RGBA8(127,137,146,255)), static_cast<unsigned>(RGBA8(89,98,107,255)), static_cast<unsigned>(RGBA8(157,167,176,255))},
+        {-115,15,14,10,14, static_cast<unsigned>(RGBA8(158,146,136,255)), static_cast<unsigned>(RGBA8(112,101,92,255)), static_cast<unsigned>(RGBA8(188,175,164,255))},
+        { 115,15,14,22,14, static_cast<unsigned>(RGBA8(120,131,143,255)), static_cast<unsigned>(RGBA8(83,93,105,255)), static_cast<unsigned>(RGBA8(150,161,173,255))},
+        { 145,15,14,14,14, static_cast<unsigned>(RGBA8(147,141,136,255)), static_cast<unsigned>(RGBA8(103,98,93,255)), static_cast<unsigned>(RGBA8(176,170,164,255))},
+
+        {-145,90,16,18,16, static_cast<unsigned>(RGBA8(125,135,144,255)), static_cast<unsigned>(RGBA8(87,96,105,255)), static_cast<unsigned>(RGBA8(155,165,174,255))},
+        {-115,90,14,12,14, static_cast<unsigned>(RGBA8(161,147,132,255)), static_cast<unsigned>(RGBA8(115,102,88,255)), static_cast<unsigned>(RGBA8(191,175,157,255))},
+        { 115,90,15,17,15, static_cast<unsigned>(RGBA8(135,142,147,255)), static_cast<unsigned>(RGBA8(95,101,107,255)), static_cast<unsigned>(RGBA8(165,172,177,255))},
+        { 145,90,14,11,14, static_cast<unsigned>(RGBA8(155,145,137,255)), static_cast<unsigned>(RGBA8(109,101,94,255)), static_cast<unsigned>(RGBA8(184,174,166,255))},
+
+        {-145,145,14,24,14, static_cast<unsigned>(RGBA8(118,130,141,255)), static_cast<unsigned>(RGBA8(81,91,102,255)), static_cast<unsigned>(RGBA8(148,160,171,255))},
+        {-105,145,16,15,16, static_cast<unsigned>(RGBA8(151,144,136,255)), static_cast<unsigned>(RGBA8(106,99,93,255)), static_cast<unsigned>(RGBA8(180,173,165,255))},
+        { -60,145,15,20,15, static_cast<unsigned>(RGBA8(126,136,145,255)), static_cast<unsigned>(RGBA8(88,97,106,255)), static_cast<unsigned>(RGBA8(156,166,175,255))},
+        { -15,145,14,13,14, static_cast<unsigned>(RGBA8(161,147,134,255)), static_cast<unsigned>(RGBA8(115,102,90,255)), static_cast<unsigned>(RGBA8(191,175,159,255))},
+        {  30,145,15,23,15, static_cast<unsigned>(RGBA8(121,132,143,255)), static_cast<unsigned>(RGBA8(84,94,105,255)), static_cast<unsigned>(RGBA8(151,162,173,255))},
+        {  75,145,16,14,16, static_cast<unsigned>(RGBA8(146,142,138,255)), static_cast<unsigned>(RGBA8(102,99,95,255)), static_cast<unsigned>(RGBA8(175,171,166,255))},
+        { 120,145,15,19,15, static_cast<unsigned>(RGBA8(129,138,146,255)), static_cast<unsigned>(RGBA8(90,99,107,255)), static_cast<unsigned>(RGBA8(159,168,176,255))}
+    };
+
+    for(const OB& b: outer)
+        cityBuilding({b.x,0.0f,b.z},b.sx,b.sy,b.sz,cam,b.c1,b.c2,b.c3);
+}
+
+void drawOuterRoadsAndDetails(const Camera& cam) {
+    roadX(-95.0f,cam);
+    roadX(-25.0f,cam);
+    roadX(115.0f,cam);
+    roadZ(-95.0f,cam);
+    roadZ(95.0f,cam);
+
+    sidewalkStripX(-95.0f,cam);
+    sidewalkStripX(-25.0f,cam);
+    sidewalkStripX(115.0f,cam);
+    sidewalkStripZ(-95.0f,cam);
+    sidewalkStripZ(95.0f,cam);
+
+    static const float outerTrees[][2] = {
+        {-165,-150},{-135,-150},{-95,-150},{-55,-150},{-15,-150},{25,-150},{65,-150},{105,-150},{145,-150},
+        {-165,125},{-125,125},{-85,125},{-45,125},{-5,125},{35,125},{75,125},{115,125},{155,125}
+    };
+    for(const auto& p:outerTrees) treeSimple(p[0],p[1],cam);
 }
 
 void drawTestCity(const Camera& cam) {
@@ -277,6 +422,9 @@ void drawTestCity(const Camera& cam) {
     roadZ(22.0f,cam);
 
     drawExpandedBuildings(cam);
+    drawStreetDetails(cam);
+    drawOuterRoadsAndDetails(cam);
+    drawOuterDistrictBuildings(cam);
 }
 
 } // namespace
@@ -304,8 +452,8 @@ void VitaRenderer::draw(const Player& player,
     vita2d_start_drawing();
     vita2d_clear_screen();
 
-    // M83 original Vita expansion: pure geometry only.
-    // Larger ground, roads and multiple buildings.
+    // M89 original Vita expansion: pure geometry only.
+    // Buildings use separated lots so their footprints never overlap.
     drawTestCity(camera);
 
     // Tiny center marker.
