@@ -51,6 +51,8 @@ set(CORE_SOURCES
     src/game/CombatSystem.cpp
     src/game/StoryHeistSystem.cpp
     src/game/VitaStoryPolish.cpp
+    src/platform/vita/VitaDevMenu.cpp
+    src/platform/vita/DevDebugState.cpp
 )
 
 if(BUILD_VITA)
