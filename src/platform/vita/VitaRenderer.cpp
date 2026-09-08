@@ -199,6 +199,14 @@ void simpleWindowsFront(const Vec3& c,float sx,float sy,float sz,
     }
 }
 
+
+// M92B compile fix: these M92 helpers are implemented later in this file.
+// Forward declarations are required because cityBuilding() calls them first.
+static void bevelBuilding(const Vec3& c,float sx,float sy,float sz,
+                          const Camera& cam,unsigned front,unsigned side,unsigned top);
+static void m92WindowsRoundedFacade(const Vec3& c,float sx,float sy,float sz,
+                                    const Camera& cam);
+
 void cityBuilding(const Vec3& c,float sx,float sy,float sz,
                   const Camera& cam,unsigned front,unsigned side,unsigned top) {
     // M92: beveled / faceted building replaces the old plain box silhouette.
