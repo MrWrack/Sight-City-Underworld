@@ -1,6 +1,8 @@
 #include "platform/vita/VitaRenderer.h"
 #include <vita2d.h>
 #include <cmath>
+#include "platform/vita/DevDebugState.h"
+#include <cstdio>
 
 namespace {
 
@@ -876,8 +878,35 @@ void drawTestCity(const Camera& cam) {
 
 } // namespace
 
+
+// M94: coordinate HUD is independent from the Dev Menu panel.
+// It stays in the upper-right corner and can be toggled from Dev Menu.
+static vita2d_pgf* gM94DebugFont = nullptr;
+
+static void m94DrawCoordinatesHud(const Player& player) {
+    if(!DevDebugState::coordinatesHudEnabled() || !gM94DebugFont) return;
+
+    char line1[96];
+    char line2[96];
+    std::snprintf(line1,sizeof(line1),"X %.2f   Y %.2f",player.position.x,player.position.y);
+    std::snprintf(line2,sizeof(line2),"Z %.2f",player.position.z);
+
+    const float scale = 0.72f;
+    const int pad = 10;
+    const int boxW = 255;
+    const int boxH = 58;
+    const int x = 960 - boxW - 14;
+    const int y = 14;
+
+    vita2d_draw_rectangle((float)x,(float)y,(float)boxW,(float)boxH,RGBA8(0,0,0,185));
+    vita2d_draw_rectangle((float)x,(float)y,(float)boxW,2.0f,RGBA8(210,55,55,255));
+    vita2d_pgf_draw_text(gM94DebugFont,x+pad,y+24,RGBA8(255,255,255,255),scale,line1);
+    vita2d_pgf_draw_text(gM94DebugFont,x+pad,y+47,RGBA8(220,230,238,255),scale,line2);
+}
+
 bool VitaRenderer::init() {
     if (vita2d_init() < 0) return false;
+    gM94DebugFont = vita2d_load_default_pgf();
 
     // Solid clear color only. No textures/images.
     vita2d_set_clear_color(static_cast<unsigned>(RGBA8(110, 175, 225, 255)));
@@ -909,6 +938,7 @@ void VitaRenderer::draw(const Player& player,
         static_cast<unsigned>(RGBA8(255,255,255,255))
     );
 
+    m94DrawCoordinatesHud(player);
     vita2d_end_drawing();
     vita2d_swap_buffers();
 
