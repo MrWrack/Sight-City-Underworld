@@ -18,7 +18,7 @@ void Player::update(const InputState& in,float dt){
     if(inVehicle){ moveState_=PlayerMoveState::Driving; return; }
     Vec3 wish{in.moveX,0,in.moveY}; float mag=length(wish); if(mag>1.0f) wish=normalize(wish);
     float speed=0.0f; if(mag>0.05f) speed=in.stealth()?2.0f:(in.sprint()?6.5f:(mag>0.65f?4.0f:2.7f));
-    velocity.x=wish.x*speed; velocity.z=wish.z*speed;
+    velocity.x=wish.x*speed; velocity.z=wish.z*speed; if(mag>0.05f) heading=std::atan2(wish.x,wish.z);
     if(grounded_ && in.jump()){ grounded_=false; verticalVelocity_=5.8f; fallStartY_=position.y; }
     if(!grounded_){ verticalVelocity_-=15.5f*dt; position.y+=verticalVelocity_*dt; if(position.y<=0.0f){ position.y=0.0f; verticalVelocity_=0.0f; grounded_=true; } }
     position.x+=velocity.x*dt; position.z+=velocity.z*dt; updateState(in,mag,speed);
@@ -29,16 +29,31 @@ void Player::updateWorld(const InputState& in,float dt,const EnvironmentSystem& 
     if(inVehicle){ moveState_=PlayerMoveState::Driving; return; }
     Vec3 wish{in.moveX,0,in.moveY}; float mag=length(wish); if(mag>1.0f) wish=normalize(wish);
     float speed=0.0f; if(mag>0.05f) speed=in.stealth()?2.0f:(in.sprint()?6.5f:(mag>0.65f?4.0f:2.7f));
-    velocity.x=wish.x*speed; velocity.z=wish.z*speed;
+    velocity.x=wish.x*speed; velocity.z=wish.z*speed; if(mag>0.05f) heading=std::atan2(wish.x,wish.z);
 
     const float ground=collisions.groundHeight(position.x,position.z,environment);
+
+    // M96 anti-hover recovery: if physics says Dash is airborne but he is only
+    // a tiny amount above/below the collision floor, recover to grounded state.
+    // Real jumps remain untouched once they are clearly above the floor.
+    if(!grounded_ && std::fabs(position.y-ground)<0.35f && verticalVelocity_<=0.0f) {
+        position.y=ground;
+        verticalVelocity_=0.0f;
+        grounded_=true;
+    }
     if(grounded_) position.y=ground;
     if(grounded_ && in.jump()){ grounded_=false; verticalVelocity_=5.8f; fallStartY_=position.y; }
 
     Vec3 horizontalDesired{position.x+velocity.x*dt,position.y,position.z+velocity.z*dt};
     if(grounded_){
         Vec3 resolved=collisions.resolvePlayerMove(position,horizontalDesired,environment,nullptr);
-        position.x=resolved.x; position.z=resolved.z; position.y=resolved.y;
+        position.x=resolved.x;
+        position.z=resolved.z;
+
+        // M71: keep Dash locked to the actual terrain while grounded.
+        // Do not trust a stale/resolved Y value from horizontal collision handling.
+        position.y=collisions.groundHeight(position.x,position.z,environment);
+        verticalVelocity_=0.0f;
     } else {
         // Air movement remains collision aware horizontally, but does not glue Dash to the ground.
         Vec3 probe=collisions.resolvePlayerMove({position.x,collisions.groundHeight(position.x,position.z,environment),position.z},
@@ -49,9 +64,18 @@ void Player::updateWorld(const InputState& in,float dt,const EnvironmentSystem& 
         if(position.y<=landingGround){
             float fallDistance=std::max(0.0f,fallStartY_-landingGround);
             if(fallDistance>4.0f){ lastFallDamage_=(fallDistance-4.0f)*7.5f; health=std::max(0.0f,health-lastFallDamage_); }
-            position.y=landingGround; verticalVelocity_=0.0f; grounded_=true;
+            position.y=landingGround;
+            verticalVelocity_=0.0f;
+            grounded_=true;
         }
     }
+
+    // M71 safety clamp: when grounded, always snap exactly to terrain.
+    if(grounded_){
+        position.y=collisions.groundHeight(position.x,position.z,environment);
+        verticalVelocity_=0.0f;
+    }
+
     updateState(in,mag,speed);
 }
 
