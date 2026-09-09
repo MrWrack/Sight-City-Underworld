@@ -58,7 +58,7 @@ int main() {
     VitaInput controls;
     VitaDevMenu devMenu; // Temporary dev menu.
     Player player;
-    player.position={0.28f,2.20f,7.92f}; // M80 spawn position
+    player.position={0.28f,2.20f,7.92f}; // M97 X/Z spawn; Y snaps to real collision floor before play. // M80 spawn position
     Vehicle car;
     car.position={4,0,4};
     Camera camera;

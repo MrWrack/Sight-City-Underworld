@@ -870,13 +870,7 @@ static void m96MountainPeak(const Vec3& base,float radius,float height,const Cam
     const Vec3 top={base.x,base.y+height,base.z};
     for(int i=0;i<sides;i++) {
         const int j=(i+1)%sides;
-
-        // M96B compile fix:
-        // triPool() takes projected P2 vertices, not world-space Vec3 values.
-        const P2 pa=projectSafe(ring[i],cam);
-        const P2 pb=projectSafe(ring[j],cam);
-        const P2 pc=projectSafe(top,cam);
-        triPool(pa,pb,pc,(i&1)?low:high);
+        triPool(ring[i],ring[j],top,cam,(i&1)?low:high);
     }
 }
 
@@ -907,6 +901,55 @@ static void m96FixedMountainScenery(const Camera& cam) {
         m96MountainPeak({0.0f,0.0f,37500.0f},3600.0f,700.0f,cam,hillA,rockB);
         m96MountainPeak({6500.0f,0.0f,35500.0f},2800.0f,540.0f,cam,hillA,rockB);
     }
+}
+
+
+// M97 visible Dash -----------------------------------------------------------
+// Low-poly third-person player model. Uses existing pool-safe geometry helpers.
+// Feet are anchored to Player::position.y, which M96 locks to collision ground.
+static void m97DrawDash(const Player& player,const Camera& cam) {
+    if(player.inVehicle) return;
+
+    const float x=player.position.x;
+    const float y=player.position.y;
+    const float z=player.position.z;
+    const float a=player.heading;
+    const float sn=std::sin(a), cs=std::cos(a);
+
+    const unsigned pants=static_cast<unsigned>(RGBA8(35,39,46,255));
+    const unsigned shoes=static_cast<unsigned>(RGBA8(20,21,24,255));
+    const unsigned jacket=static_cast<unsigned>(RGBA8(50,58,68,255));
+    const unsigned shirt=static_cast<unsigned>(RGBA8(175,48,48,255));
+    const unsigned skin=static_cast<unsigned>(RGBA8(188,143,112,255));
+    const unsigned hair=static_cast<unsigned>(RGBA8(38,31,28,255));
+
+    auto part=[&](float side,float up,float forward,float sx,float sy,float sz,
+                  unsigned front,unsigned sideCol,unsigned top) {
+        Vec3 c{x + cs*side + sn*forward,
+               y + up,
+               z - sn*side + cs*forward};
+        bevelBuilding(c,sx,sy,sz,cam,front,sideCol,top);
+    };
+
+    // Shoes + legs: bottom visually reaches the collision floor.
+    part(-0.18f,0.10f, 0.04f,0.22f,0.20f,0.42f,shoes,shoes,shoes);
+    part( 0.18f,0.10f, 0.04f,0.22f,0.20f,0.42f,shoes,shoes,shoes);
+    part(-0.18f,0.62f, 0.00f,0.27f,0.88f,0.30f,pants,pants,pants);
+    part( 0.18f,0.62f, 0.00f,0.27f,0.88f,0.30f,pants,pants,pants);
+
+    // Torso and jacket.
+    part(0.0f,1.33f,0.0f,0.72f,0.72f,0.38f,jacket,
+         static_cast<unsigned>(RGBA8(40,47,57,255)),jacket);
+    part(0.0f,1.35f,0.205f,0.28f,0.52f,0.04f,shirt,shirt,shirt);
+
+    // Arms.
+    part(-0.48f,1.30f,0.0f,0.18f,0.72f,0.20f,jacket,jacket,jacket);
+    part( 0.48f,1.30f,0.0f,0.18f,0.72f,0.20f,jacket,jacket,jacket);
+
+    // Head/hair.
+    part(0.0f,1.91f,0.0f,0.43f,0.46f,0.40f,skin,
+         static_cast<unsigned>(RGBA8(160,116,90,255)),skin);
+    part(0.0f,2.15f,-0.01f,0.45f,0.10f,0.42f,hair,hair,hair);
 }
 
 void drawTestCity(const Camera& cam) {
@@ -1084,6 +1127,8 @@ void VitaRenderer::draw(const Player& player,
     );
 
     m94DrawCoordinatesHud(player);
+    // M97: Dash is visible in third-person and stands on collision ground.
+    m97DrawDash(player,cam);
     vita2d_end_drawing();
     vita2d_swap_buffers();
 
