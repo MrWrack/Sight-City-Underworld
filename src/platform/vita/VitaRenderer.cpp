@@ -870,7 +870,10 @@ static void m96MountainPeak(const Vec3& base,float radius,float height,const Cam
     const Vec3 top={base.x,base.y+height,base.z};
     for(int i=0;i<sides;i++) {
         const int j=(i+1)%sides;
-        triPool(ring[i],ring[j],top,cam,(i&1)?low:high);
+        const P2 pa = projectSafe(ring[i], cam);
+        const P2 pb = projectSafe(ring[j], cam);
+        const P2 pc = projectSafe(top, cam);
+        triPool(pa, pb, pc, (i&1) ? low : high);
     }
 }
 
@@ -1128,7 +1131,7 @@ void VitaRenderer::draw(const Player& player,
 
     m94DrawCoordinatesHud(player);
     // M97: Dash is visible in third-person and stands on collision ground.
-    m97DrawDash(player,cam);
+    m97DrawDash(player,camera);
     vita2d_end_drawing();
     vita2d_swap_buffers();
 
