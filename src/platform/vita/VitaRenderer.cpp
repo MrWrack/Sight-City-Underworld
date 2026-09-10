@@ -572,7 +572,7 @@ static bool m95CanPlace(const M95PlacedBuilding* placed,int count,
     return true;
 }
 
-static void m98Tree(float x,float z,const Camera& cam,unsigned seed) {
+static void m111Tree(float x,float z,const Camera& cam,unsigned seed) {
     const unsigned trunkA=static_cast<unsigned>(RGBA8(89,62,42,255));
     const unsigned trunkB=static_cast<unsigned>(RGBA8(65,44,30,255));
     const unsigned leafA=static_cast<unsigned>(RGBA8(40+(seed&13u),102,46,255));
@@ -584,12 +584,14 @@ static void m98Tree(float x,float z,const Camera& cam,unsigned seed) {
     prismPool({x-0.22f,1.90f,z},0.07f,0.72f,8,cam,trunkA,trunkB,trunkA);
     prismPool({x+0.24f,2.02f,z-0.08f},0.07f,0.64f,8,cam,trunkA,trunkB,trunkA);
 
-    // Irregular layered crown: deliberately not one cube/one sphere.
+    // M111: fuller, asymmetric low-poly crown for a less blocky silhouette.
     prismPool({x,2.25f,z},0.74f,1.15f,12,cam,leafA,leafB,leafC);
     prismPool({x-0.62f,2.48f,z+0.18f},0.56f,0.88f,10,cam,leafB,leafA,leafC);
     prismPool({x+0.60f,2.55f,z-0.12f},0.58f,0.92f,10,cam,leafC,leafB,leafA);
     prismPool({x-0.18f,3.10f,z-0.34f},0.55f,0.88f,12,cam,leafA,leafC,leafB);
     prismPool({x+0.24f,3.28f,z+0.30f},0.48f,0.74f,10,cam,leafC,leafA,leafB);
+    prismPool({x-0.46f,2.92f,z-0.48f},0.42f,0.64f,10,cam,leafB,leafC,leafA);
+    prismPool({x+0.48f,2.92f,z+0.48f},0.40f,0.62f,10,cam,leafA,leafB,leafC);
 
     // Bark and foliage texture overlays.
     m99TexturedQuad({x-0.13f,gM102WorldBaseY,z-0.18f},{x+0.13f,gM102WorldBaseY,z-0.18f},
@@ -603,7 +605,7 @@ static void m98Tree(float x,float z,const Camera& cam,unsigned seed) {
                     cam,M99_LEAVES,leafB);
 }
 
-static void m98StreetLamp(float x,float z,const Camera& cam) {
+static void m111StreetLamp(float x,float z,const Camera& cam) {
     const unsigned pole=static_cast<unsigned>(RGBA8(54,58,62,255));
     const unsigned metal=static_cast<unsigned>(RGBA8(73,77,82,255));
     const unsigned light=static_cast<unsigned>(RGBA8(255,224,142,255));
@@ -612,8 +614,9 @@ static void m98StreetLamp(float x,float z,const Camera& cam) {
     // Slim 8-sided pole instead of a blocky column.
     prismPool({x,gM102WorldBaseY,z},0.075f,3.45f,8,cam,pole,metal,pole);
 
-    // Small horizontal arm and tapered-looking lamp head.
-    boxPool({x+0.28f,3.30f,z},0.62f,0.10f,0.10f,cam,metal,pole,metal);
+    // M111: slimmer curved-looking arm assembled from short segments.
+    boxPool({x+0.18f,3.30f,z},0.38f,0.08f,0.08f,cam,metal,pole,metal);
+    boxPool({x+0.39f,3.25f,z},0.22f,0.07f,0.08f,cam,metal,pole,metal);
     prismPool({x+0.56f,3.20f,z},0.18f,0.18f,8,cam,metal,pole,metal);
     boxPool({x+0.56f,3.13f,z},0.34f,0.08f,0.22f,cam,light,glow,light);
 
@@ -726,20 +729,20 @@ void drawM90Cell(int cx,int cz,const Camera& cam) {
             float tx=x0+10.0f+float((h>>9)%44u);
             float tz=z0+10.0f+float((h>>15)%44u);
             if(!m98NearRoadX(cx,tx) && !m98NearRoadZ(cz,tz))
-                m98Tree(tx,tz,cam,h);
+                m111Tree(tx,tz,cam,h);
         }
     }
 
     // Lamps follow roads at fixed world positions.
     if((cx%4)==0) {
         const float rx=x0+32.0f;
-        m98StreetLamp(rx-6.0f,z0+14.0f,cam);
-        m98StreetLamp(rx+6.0f,z0+50.0f,cam);
+        m111StreetLamp(rx-6.0f,z0+14.0f,cam);
+        m111StreetLamp(rx+6.0f,z0+50.0f,cam);
     }
     if((cz%4)==0) {
         const float rz=z0+32.0f;
-        m98StreetLamp(x0+14.0f,rz-6.0f,cam);
-        m98StreetLamp(x0+50.0f,rz+6.0f,cam);
+        m111StreetLamp(x0+14.0f,rz-6.0f,cam);
+        m111StreetLamp(x0+50.0f,rz+6.0f,cam);
     }
 }
 
