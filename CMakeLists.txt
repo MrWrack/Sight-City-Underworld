@@ -51,8 +51,6 @@ set(CORE_SOURCES
     src/game/CombatSystem.cpp
     src/game/StoryHeistSystem.cpp
     src/game/VitaStoryPolish.cpp
-    src/platform/vita/VitaDevMenu.cpp
-    src/platform/vita/DevDebugState.cpp
 )
 
 if(BUILD_VITA)
@@ -65,7 +63,6 @@ if(BUILD_VITA)
         ${CORE_SOURCES}
         src/platform/vita/VitaInput.cpp
         src/platform/vita/VitaRenderer.cpp
-        src/platform/vita/VitaDevMenu.cpp
         src/platform/vita/main_vita.cpp
     )
     target_include_directories(city_limits_vita PRIVATE src)
@@ -89,6 +86,11 @@ if(BUILD_VITA)
         ScePgf_stub
         ScePvf_stub
 
+        # M101D: libvita2d image/font dependencies required by PNG texture loading.
+        freetype
+        png
+        jpeg
+        z
         m
     )
 
