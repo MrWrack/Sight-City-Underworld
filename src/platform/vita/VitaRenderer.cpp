@@ -1261,6 +1261,207 @@ static void m94DrawCoordinatesHud(const Player& player) {
 }
 
 
+// M107 -----------------------------------------------------------------------
+// Lightweight compass HUD for original PS Vita.
+// Uses player heading only, so it adds almost no GPU/memory cost.
+static const char* m107Cardinal(float heading) {
+    const float twoPi = 6.28318530718f;
+    float a = std::fmod(heading, twoPi);
+    if(a < 0.0f) a += twoPi;
+
+    // heading 0 = North, +PI/2 = East.
+    const int sector = int(std::floor((a + 0.39269908169f) / 0.78539816339f)) & 7;
+    static const char* names[8] = {"N","NE","E","SE","S","SW","W","NW"};
+    return names[sector];
+}
+
+static void m107DrawCompass(const Player& player) {
+    if(!gM94DebugFont) return;
+
+    const float x = 330.0f;
+    const float y = 14.0f;
+    const float w = 300.0f;
+    const float h = 42.0f;
+
+    // Dark translucent bar.
+    vita2d_draw_rectangle(x,y,w,h,RGBA8(0,0,0,155));
+    vita2d_draw_rectangle(x,y,w,2.0f,RGBA8(210,55,55,255));
+
+    // Center pointer.
+    vita2d_draw_rectangle(x+w*0.5f-1.0f,y+5.0f,2.0f,11.0f,RGBA8(255,255,255,255));
+    vita2d_draw_rectangle(x+w*0.5f-4.0f,y+5.0f,8.0f,2.0f,RGBA8(255,255,255,255));
+
+    // Main direction label.
+    const char* dir = m107Cardinal(player.heading);
+    vita2d_pgf_draw_text(gM94DebugFont,
+                         x+w*0.5f-10.0f,y+34.0f,
+                         RGBA8(255,255,255,255),0.85f,dir);
+
+    // Neighboring cardinal hints.
+    float a = std::fmod(player.heading, 6.28318530718f);
+    if(a < 0.0f) a += 6.28318530718f;
+    const float deg = a * 57.295779513f;
+
+    char degText[32];
+    std::snprintf(degText,sizeof(degText),"%03d",int(deg+0.5f)%360);
+    vita2d_pgf_draw_text(gM94DebugFont,
+                         x+18.0f,y+30.0f,
+                         RGBA8(205,215,225,255),0.62f,degText);
+
+    // Fixed orientation letters help while rotating.
+    vita2d_pgf_draw_text(gM94DebugFont,x+78.0f, y+30.0f,RGBA8(170,180,190,255),0.56f,"W");
+    vita2d_pgf_draw_text(gM94DebugFont,x+216.0f,y+30.0f,RGBA8(170,180,190,255),0.56f,"E");
+}
+
+
+// M108 -----------------------------------------------------------------------
+// Lightweight top-left minimap. It is procedural HUD geometry, not a full PNG,
+// so it is cheap enough for original PS Vita and always follows the same
+// deterministic M90 road/building layout as the 3D world.
+
+static void m108RotateToMap(float wx,float wz,
+                            const Player& player,
+                            float scale,float& sx,float& sy) {
+    const float dx=wx-player.position.x;
+    const float dz=wz-player.position.z;
+
+    // Rotate world around player so "forward" is always up on the minimap.
+    const float a=-player.heading;
+    const float ca=std::cos(a), sa=std::sin(a);
+    const float rx=dx*ca-dz*sa;
+    const float rz=dx*sa+dz*ca;
+
+    sx=rx*scale;
+    sy=-rz*scale;
+}
+
+static void m108DrawMiniMap(const Player& player) {
+    const float mx=14.0f;
+    const float my=14.0f;
+    const float mw=205.0f;
+    const float mh=150.0f;
+    const float cx=mx+mw*0.5f;
+    const float cy=my+mh*0.5f;
+
+    const float metersAcross=180.0f;
+    const float scale=mw/metersAcross;
+
+    // Background / border.
+    vita2d_draw_rectangle(mx,my,mw,mh,RGBA8(8,20,18,205));
+    vita2d_draw_rectangle(mx,my,mw,2.0f,RGBA8(210,55,55,255));
+    vita2d_draw_rectangle(mx,my+mh-2.0f,mw,2.0f,RGBA8(95,105,112,255));
+    vita2d_draw_rectangle(mx,my,2.0f,mh,RGBA8(95,105,112,255));
+    vita2d_draw_rectangle(mx+mw-2.0f,my,2.0f,mh,RGBA8(95,105,112,255));
+
+    // Ground tint.
+    vita2d_draw_rectangle(mx+3.0f,my+3.0f,mw-6.0f,mh-6.0f,RGBA8(58,95,58,190));
+
+    // Nearby M90 road grid. World roads repeat every 4 * 64 m = 256 m,
+    // centered at cell center (+32). Scan enough lines around the player.
+    const float roadSpacing=256.0f;
+    const float roadHalf=5.0f;
+
+    const int baseX=int(std::floor((player.position.x-32.0f)/roadSpacing));
+    const int baseZ=int(std::floor((player.position.z-32.0f)/roadSpacing));
+
+    // Draw road strips by sampling short segments; clipping is done manually.
+    for(int ix=baseX-2; ix<=baseX+2; ++ix) {
+        const float wx=ix*roadSpacing+32.0f;
+        for(int seg=-18; seg<18; ++seg) {
+            const float z0=player.position.z+seg*10.0f;
+            const float z1=z0+10.0f;
+            float ax,ay,bx,by;
+            m108RotateToMap(wx,z0,player,scale,ax,ay);
+            m108RotateToMap(wx,z1,player,scale,bx,by);
+            ax+=cx; ay+=cy; bx+=cx; by+=cy;
+            if((ax<mx&&bx<mx)||(ax>mx+mw&&bx>mx+mw)||
+               (ay<my&&by<my)||(ay>my+mh&&by>my+mh)) continue;
+            vita2d_draw_line(ax,ay,bx,by,roadHalf*scale*2.0f,RGBA8(35,38,41,255));
+        }
+    }
+
+    for(int iz=baseZ-2; iz<=baseZ+2; ++iz) {
+        const float wz=iz*roadSpacing+32.0f;
+        for(int seg=-18; seg<18; ++seg) {
+            const float x0=player.position.x+seg*10.0f;
+            const float x1=x0+10.0f;
+            float ax,ay,bx,by;
+            m108RotateToMap(x0,wz,player,scale,ax,ay);
+            m108RotateToMap(x1,wz,player,scale,bx,by);
+            ax+=cx; ay+=cy; bx+=cx; by+=cy;
+            if((ax<mx&&bx<mx)||(ax>mx+mw&&bx>mx+mw)||
+               (ay<my&&by<my)||(ay>my+mh&&by>my+mh)) continue;
+            vita2d_draw_line(ax,ay,bx,by,roadHalf*scale*2.0f,RGBA8(35,38,41,255));
+        }
+    }
+
+    // Nearby deterministic building footprints, same placement math as M106.
+    const int pcx=int(std::floor(player.position.x/64.0f));
+    const int pcz=int(std::floor(player.position.z/64.0f));
+
+    for(int dz=-2; dz<=2; ++dz) {
+        for(int dx=-2; dx<=2; ++dx) {
+            const int ccx=pcx+dx, ccz=pcz+dz;
+            const float x0=ccx*64.0f, z0=ccz*64.0f;
+            const unsigned h=m90Hash(ccx,ccz);
+            const int region=m90Region(x0+32.0f,z0+32.0f);
+
+            unsigned density=0;
+            if(region==5) density=2;
+            else if(region==4 || region==3) density=((h>>4)&1u);
+            else density=((h&7u)==0u)?1u:0u;
+
+            static const float lotX[4]={12.0f,52.0f,12.0f,52.0f};
+            static const float lotZ[4]={12.0f,12.0f,52.0f,52.0f};
+
+            M95PlacedBuilding placed[4];
+            int placedCount=0;
+
+            for(unsigned i=0;i<density && i<4u;i++) {
+                const unsigned q=m90Hash(ccx*31+int(i)*17,ccz*37+int(i)*23);
+                const float sx=8.0f+float((q>>16)%4u);
+                const float sz=8.0f+float((q>>20)%4u);
+                const int li=int((q+i)%4u);
+                float bx=x0+lotX[li]+(float((q>>5)%5u)-2.0f)*0.45f;
+                float bz=z0+lotZ[li]+(float((q>>9)%5u)-2.0f)*0.45f;
+
+                if(m98NearRoadX(ccx,bx)) bx=(bx<x0+32.0f)?x0+12.0f:x0+52.0f;
+                if(m98NearRoadZ(ccz,bz)) bz=(bz<z0+32.0f)?z0+12.0f:z0+52.0f;
+                if(!m95CanPlace(placed,placedCount,bx,bz,sx,sz)) continue;
+                placed[placedCount++]={bx,bz,sx,sz};
+
+                float rx,ry;
+                m108RotateToMap(bx,bz,player,scale,rx,ry);
+                rx+=cx; ry+=cy;
+
+                // Small top-down footprint; keep inside minimap.
+                const float rw=std::max(3.0f,sx*scale);
+                const float rh=std::max(3.0f,sz*scale);
+                if(rx+rw*.5f<mx || rx-rw*.5f>mx+mw ||
+                   ry+rh*.5f<my || ry-rh*.5f>my+mh) continue;
+
+                vita2d_draw_rectangle(rx-rw*.5f,ry-rh*.5f,rw,rh,
+                                      RGBA8(160,150,142,255));
+            }
+        }
+    }
+
+    // Player marker always stays in the center.
+    vita2d_draw_fill_circle(cx,cy,5.5f,RGBA8(255,255,255,255));
+
+    // Forward pointer triangle using simple 2D lines.
+    vita2d_draw_line(cx,cy-13.0f,cx-6.0f,cy-2.0f,2.0f,RGBA8(255,255,255,255));
+    vita2d_draw_line(cx,cy-13.0f,cx+6.0f,cy-2.0f,2.0f,RGBA8(255,255,255,255));
+    vita2d_draw_line(cx-6.0f,cy-2.0f,cx+6.0f,cy-2.0f,2.0f,RGBA8(255,255,255,255));
+
+    // North indicator.
+    if(gM94DebugFont) {
+        vita2d_pgf_draw_text(gM94DebugFont,mx+mw-24.0f,my+22.0f,
+                             RGBA8(255,255,255,255),0.70f,"N");
+    }
+}
+
+
 // M95 -----------------------------------------------------------------------
 // Stable world anchoring for streamed procedural content.
 // IMPORTANT: object placement may depend on world cell coordinates + fixed seed
@@ -1387,7 +1588,11 @@ void VitaRenderer::draw(const Player& player,
         static_cast<unsigned>(RGBA8(255,255,255,255))
     );
 
+    // M108: minimap top-left + M107 compass top-center.
+    m108DrawMiniMap(player);
+    m107DrawCompass(player);
     m94DrawCoordinatesHud(player);
+
     // M97: Dash is visible in third-person and stands on collision ground.
     m97DrawDash(player,camera);
     vita2d_end_drawing();
