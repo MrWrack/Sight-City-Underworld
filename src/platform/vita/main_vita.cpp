@@ -267,6 +267,15 @@ int main() {
                 player.updateWorld(in,dt,environment,collisions);
             }
         }
+        // M102: after normal on-foot physics, keep Dash exactly on collision ground.
+        // Fly Mode is intentionally excluded.
+        if(!devMenu.flyMode() && !player.inVehicle) {
+            const float groundY=collisions.groundHeight(player.position.x,player.position.z,environment);
+            if(std::fabs(player.position.y-groundY)<1.25f || player.position.y<groundY) {
+                player.position.y=groundY;
+            }
+        }
+
         if(devMenu.godMode()) player.health=100.0f;
         car.update(in,dt,player.inVehicle,settings.vehicleIndicators,settings.vehicleLights);
         Vec3 focus=player.inVehicle?car.position:player.position;

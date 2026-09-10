@@ -4,10 +4,12 @@
 #include "platform/vita/DevDebugState.h"
 #include <cstdio>
 
-#include "platform/vita/M100WorldAtlas.h"
+#include "platform/vita/M102WorldAtlas.h"
 namespace {
 
 static vita2d_texture* gM100WorldAtlas = nullptr;
+static float gM102WorldBaseY=0.0f;
+static bool gM102WorldBaseCaptured=false;
 
 constexpr float W = 960.0f;
 constexpr float H = 544.0f;
@@ -150,8 +152,8 @@ static void m99TexturedQuad(const Vec3& a,const Vec3& b,
 
 static void m99GroundTile(float x0,float z0,float x1,float z1,
                           const Camera& cam,int tile,unsigned fallbackColor) {
-    m99TexturedQuad({x0,0.002f,z0},{x1,0.002f,z0},
-                    {x1,0.002f,z1},{x0,0.002f,z1},
+    m99TexturedQuad({x0,gM102WorldBaseY+0.002f,z0},{x1,gM102WorldBaseY+0.002f,z0},
+                    {x1,gM102WorldBaseY+0.002f,z1},{x0,gM102WorldBaseY+0.002f,z1},
                     cam,tile,fallbackColor);
 }
 
@@ -206,10 +208,10 @@ void boxPool(const Vec3& c,
 void groundTile(float x0, float z0, float x1, float z1,
                 const Camera& cam, unsigned color) {
     quadPool(
-        {x0,0.0f,z0},
-        {x1,0.0f,z0},
-        {x1,0.0f,z1},
-        {x0,0.0f,z1},
+        {x0,gM102WorldBaseY,z0},
+        {x1,gM102WorldBaseY,z0},
+        {x1,gM102WorldBaseY,z1},
+        {x0,gM102WorldBaseY,z1},
         cam,color
     );
 }
@@ -306,10 +308,12 @@ static void m92WindowsRoundedFacade(const Vec3& c,float sx,float sy,float sz,
 void cityBuilding(const Vec3& c,float sx,float sy,float sz,
                   const Camera& cam,unsigned front,unsigned side,unsigned top) {
     // M92: beveled / faceted building replaces the old plain box silhouette.
-    bevelBuilding(c,sx,sy,sz,cam,front,side,top);
-    m99BuildingTextureOverlay(c,sx,sy,sz,cam,
+    Vec3 wc=c;
+    if(std::fabs(wc.y)<0.001f) wc.y=gM102WorldBaseY;
+    bevelBuilding(wc,sx,sy,sz,cam,front,side,top);
+    m99BuildingTextureOverlay(wc,sx,sy,sz,cam,
                               static_cast<unsigned>(std::fabs(c.x*13.0f+c.z*7.0f)));
-    m92WindowsRoundedFacade(c,sx,sy,sz,cam);
+    m92WindowsRoundedFacade(wc,sx,sy,sz,cam);
 }
 
 void drawExpandedBuildings(const Camera& cam) {
@@ -576,7 +580,7 @@ static void m98Tree(float x,float z,const Camera& cam,unsigned seed) {
     const unsigned leafC=static_cast<unsigned>(RGBA8(58,121,53,255));
 
     // Thin trunk with two branch stubs.
-    prismPool({x,0.0f,z},0.16f,3.05f,10,cam,trunkA,trunkB,trunkA);
+    prismPool({x,gM102WorldBaseY,z},0.16f,3.05f,10,cam,trunkA,trunkB,trunkA);
     prismPool({x-0.22f,1.90f,z},0.07f,0.72f,8,cam,trunkA,trunkB,trunkA);
     prismPool({x+0.24f,2.02f,z-0.08f},0.07f,0.64f,8,cam,trunkA,trunkB,trunkA);
 
@@ -588,7 +592,7 @@ static void m98Tree(float x,float z,const Camera& cam,unsigned seed) {
     prismPool({x+0.24f,3.28f,z+0.30f},0.48f,0.74f,10,cam,leafC,leafA,leafB);
 
     // Bark and foliage texture overlays.
-    m99TexturedQuad({x-0.13f,0.0f,z-0.18f},{x+0.13f,0.0f,z-0.18f},
+    m99TexturedQuad({x-0.13f,gM102WorldBaseY,z-0.18f},{x+0.13f,gM102WorldBaseY,z-0.18f},
                     {x+0.13f,3.02f,z-0.18f},{x-0.13f,3.02f,z-0.18f},
                     cam,M99_BARK,trunkA);
     m99TexturedQuad({x-1.05f,2.22f,z-0.08f},{x+1.05f,2.22f,z-0.08f},
@@ -606,7 +610,7 @@ static void m98StreetLamp(float x,float z,const Camera& cam) {
     const unsigned glow=static_cast<unsigned>(RGBA8(255,238,176,210));
 
     // Slim 8-sided pole instead of a blocky column.
-    prismPool({x,0.0f,z},0.075f,3.45f,8,cam,pole,metal,pole);
+    prismPool({x,gM102WorldBaseY,z},0.075f,3.45f,8,cam,pole,metal,pole);
 
     // Small horizontal arm and tapered-looking lamp head.
     boxPool({x+0.28f,3.30f,z},0.62f,0.10f,0.10f,cam,metal,pole,metal);
@@ -620,9 +624,9 @@ static void m98StreetLamp(float x,float z,const Camera& cam) {
 static void m98GrassClump(float x,float z,const Camera& cam,unsigned seed) {
     const unsigned g=static_cast<unsigned>(RGBA8(54,118+int(seed&12u),55,255));
     // Tiny crossed blades; cheap enough for a few per streamed cell.
-    quadPool({x-0.05f,0.01f,z},{x+0.05f,0.01f,z},
+    quadPool({x-0.05f,gM102WorldBaseY+0.01f,z},{x+0.05f,gM102WorldBaseY+0.01f,z},
              {x+0.03f,0.34f,z},{x-0.03f,0.34f,z},cam,g);
-    quadPool({x,0.01f,z-0.05f},{x,0.01f,z+0.05f},
+    quadPool({x,gM102WorldBaseY+0.01f,z-0.05f},{x,gM102WorldBaseY+0.01f,z+0.05f},
              {x,0.30f,z+0.03f},{x,0.30f,z-0.03f},cam,g);
 }
 
@@ -1046,7 +1050,7 @@ static void m91DrawNpc(const M91Npc& n,const Camera& cam) {
     const float sn=std::sin(n.heading), cs=std::cos(n.heading);
 
     auto wp=[&](float side,float up,float fwd)->Vec3 {
-        return {n.p.x+cs*side+sn*fwd,n.p.y+up,n.p.z-sn*side+cs*fwd};
+        return {n.p.x+cs*side+sn*fwd,gM102WorldBaseY+n.p.y+up,n.p.z-sn*side+cs*fwd};
     };
 
     // Rounded low-poly body: no cube torso/head.
@@ -1121,9 +1125,9 @@ static void m96MountainPeak(const Vec3& base,float radius,float height,const Cam
     Vec3 ring[sides];
     for(int i=0;i<sides;i++) {
         const float a=6.28318530718f*float(i)/float(sides);
-        ring[i]={base.x+std::cos(a)*radius,base.y,base.z+std::sin(a)*radius};
+        ring[i]={base.x+std::cos(a)*radius,base.y+gM102WorldBaseY,base.z+std::sin(a)*radius};
     }
-    const Vec3 top={base.x,base.y+height,base.z};
+    const Vec3 top={base.x,base.y+gM102WorldBaseY+height,base.z};
     for(int i=0;i<sides;i++) {
         const int j=(i+1)%sides;
         const P2 pa = projectSafe(ring[i], cam);
@@ -1288,7 +1292,7 @@ bool VitaRenderer::init() {
     gM94DebugFont = vita2d_load_default_pgf();
 
     // M100: load the 512x512 atlas once. Embedded PNG avoids VPK path issues.
-    gM100WorldAtlas = vita2d_load_PNG_buffer(kM100WorldAtlasPng);
+    gM100WorldAtlas = vita2d_load_PNG_buffer(kM102WorldAtlasPng);
     if(gM100WorldAtlas) {
         vita2d_texture_set_filters(
             gM100WorldAtlas,
@@ -1364,6 +1368,14 @@ void VitaRenderer::draw(const Player& player,
                         float fps) {
     vita2d_start_drawing();
     vita2d_clear_screen();
+
+    // M102: the current renderer world is a flat streamed prototype.
+    // Capture Dash's real collision-ground spawn height once and anchor the
+    // visual roads/buildings/trees/NPCs to that same fixed Y.
+    if(!gM102WorldBaseCaptured && !player.inVehicle) {
+        gM102WorldBaseY=player.position.y;
+        gM102WorldBaseCaptured=true;
+    }
 
     // M90 full-map Vita streaming: pure geometry only.
     // Buildings use separated lots so their footprints never overlap.
