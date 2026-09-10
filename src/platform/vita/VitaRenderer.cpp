@@ -551,7 +551,22 @@ struct M95PlacedBuilding {
     float x,z,sx,sz;
 };
 static bool m95CanPlace(const M95PlacedBuilding* placed,int count,
-                        float x,float z,float sx,float sz);
+                        float x,float z,float sx,float sz) {
+    const float gap=4.0f;
+    const float ahx=sx*0.5f;
+    const float ahz=sz*0.5f;
+
+    for(int i=0;i<count;i++) {
+        const float bhx=placed[i].sx*0.5f;
+        const float bhz=placed[i].sz*0.5f;
+
+        if(std::fabs(x-placed[i].x) < (ahx+bhx+gap) &&
+           std::fabs(z-placed[i].z) < (ahz+bhz+gap)) {
+            return false;
+        }
+    }
+    return true;
+}
 
 static void m98Tree(float x,float z,const Camera& cam,unsigned seed) {
     const unsigned trunkA=static_cast<unsigned>(RGBA8(89,62,42,255));
@@ -1266,18 +1281,6 @@ static bool m95RectsOverlap(float ax,float az,float ahx,float ahz,
                             float gap) {
     return std::fabs(ax-bx) < (ahx+bhx+gap) &&
            std::fabs(az-bz) < (ahz+bhz+gap);
-}
-static bool m95CanPlace(const M95PlacedBuilding* placed,int count,
-                        float x,float z,float sx,float sz) {
-    // Extra clearance makes buildings visibly separate on original Vita.
-    const float gap = 4.0f;
-    for(int i=0;i<count;i++) {
-        if(m95RectsOverlap(x,z,sx*.5f,sz*.5f,
-                           placed[i].x,placed[i].z,
-                           placed[i].sx*.5f,placed[i].sz*.5f,gap))
-            return false;
-    }
-    return true;
 }
 
 bool VitaRenderer::init() {
