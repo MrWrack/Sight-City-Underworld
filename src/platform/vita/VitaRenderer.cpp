@@ -976,10 +976,15 @@ struct M91Npc {
     Vec3 p;
     Vec3 goal;
     float speed;
+    float targetSpeed;
     float heading;
+    float targetHeading;
     float walkPhase;
     float idleTimer;
+    float reactTimer;
+    float personalSpace;
     unsigned seed;
+    unsigned behavior; // 0 wander, 1 idle/look, 2 avoid player
 };
 
 static M91Npc gM91Npcs[12];
@@ -990,24 +995,59 @@ static float m91Dist2XZ(const Vec3& a,const Vec3& b) {
     return dx*dx+dz*dz;
 }
 
+static float m110WrapAngle(float a) {
+    while(a>3.14159265359f) a-=6.28318530718f;
+    while(a<-3.14159265359f) a+=6.28318530718f;
+    return a;
+}
+
+static float m110Approach(float v,float target,float amount) {
+    if(v<target) return std::min(v+amount,target);
+    return std::max(v-amount,target);
+}
+
 static void m91InitNpcs(const Camera& cam) {
     (void)cam;
     for(int i=0;i<12;i++) {
         const float a=float(i)*0.5235987f;
-        gM91Npcs[i].p={std::cos(a)*(18.0f+float(i%4)*5.0f),0.0f,
-                       std::sin(a)*(18.0f+float(i%4)*5.0f)};
+        const float radius=18.0f+float(i%4)*5.0f;
+        gM91Npcs[i].p={std::cos(a)*radius,0.0f,std::sin(a)*radius};
         gM91Npcs[i].goal={gM91Npcs[i].p.x+float((i%3)-1)*18.0f,0.0f,
                           gM91Npcs[i].p.z+float(((i+1)%3)-1)*18.0f};
-        gM91Npcs[i].speed=0.70f+0.09f*float(i%5);
+        gM91Npcs[i].speed=0.0f;
+        gM91Npcs[i].targetSpeed=0.75f+0.10f*float(i%5);
         gM91Npcs[i].heading=a;
+        gM91Npcs[i].targetHeading=a;
         gM91Npcs[i].walkPhase=float(i)*0.45f;
         gM91Npcs[i].idleTimer=0.0f;
+        gM91Npcs[i].reactTimer=0.0f;
+        gM91Npcs[i].personalSpace=1.8f+0.25f*float(i%4);
         gM91Npcs[i].seed=0x1234u+unsigned(i)*977u;
+        gM91Npcs[i].behavior=0u;
     }
     gM91NpcInit=true;
 }
 
-static void m91UpdateNpcs(const Camera& cam,float dt) {
+static void m110ChooseNpcGoal(M91Npc& n) {
+    n.seed=n.seed*1664525u+1013904223u;
+    const float ox=float(int((n.seed>>8)&63u)-31)*0.65f;
+    n.seed=n.seed*1664525u+1013904223u;
+    const float oz=float(int((n.seed>>8)&63u)-31)*0.65f;
+
+    n.goal={n.p.x+ox,0.0f,n.p.z+oz};
+    n.targetSpeed=0.65f+float((n.seed>>16)&7u)*0.08f;
+
+    // Some pedestrians pause instead of constantly wandering.
+    if((n.seed&7u)==0u) {
+        n.behavior=1u;
+        n.idleTimer=0.8f+float((n.seed>>5)&7u)*0.20f;
+        n.targetSpeed=0.0f;
+    } else {
+        n.behavior=0u;
+    }
+}
+
+static void m91UpdateNpcs(const Camera& cam,const Player& player,float dt) {
     if(!gM91NpcInit) m91InitNpcs(cam);
     if(dt<0.0f) dt=0.0f;
     if(dt>0.05f) dt=0.05f;
@@ -1015,56 +1055,123 @@ static void m91UpdateNpcs(const Camera& cam,float dt) {
     for(int i=0;i<12;i++) {
         M91Npc& n=gM91Npcs[i];
 
-        if(n.idleTimer>0.0f) {
+        const float pdx=n.p.x-player.position.x;
+        const float pdz=n.p.z-player.position.z;
+        const float playerD2=pdx*pdx+pdz*pdz;
+
+        // Personal-space reaction: step away if Dash gets too close.
+        if(!player.inVehicle && playerD2<n.personalSpace*n.personalSpace) {
+            const float d=std::sqrt(std::max(playerD2,0.001f));
+            n.behavior=2u;
+            n.reactTimer=1.1f;
+            n.goal={n.p.x+(pdx/d)*5.0f,0.0f,n.p.z+(pdz/d)*5.0f};
+            n.targetSpeed=1.55f;
+        }
+
+        if(n.reactTimer>0.0f) {
+            n.reactTimer-=dt;
+        } else if(n.behavior==2u) {
+            n.behavior=0u;
+            m110ChooseNpcGoal(n);
+        }
+
+        if(n.idleTimer>0.0f && n.behavior!=2u) {
             n.idleTimer-=dt;
+            n.targetSpeed=0.0f;
+
+            // During idle, slowly look around instead of freezing like a statue.
+            n.seed=n.seed*1664525u+1013904223u;
+            const float look=float(int((n.seed>>20)&7u)-3)*0.015f;
+            n.targetHeading=m110WrapAngle(n.targetHeading+look);
+
+            n.speed=m110Approach(n.speed,0.0f,dt*2.5f);
+            n.heading=m110WrapAngle(n.heading+m110WrapAngle(n.targetHeading-n.heading)*std::min(1.0f,dt*3.0f));
             continue;
         }
 
         float dx=n.goal.x-n.p.x, dz=n.goal.z-n.p.z;
         float d2=dx*dx+dz*dz;
-        if(d2<2.0f) {
-            n.seed=n.seed*1664525u+1013904223u;
-            float ox=float(int((n.seed>>8)&31u)-15);
-            n.seed=n.seed*1664525u+1013904223u;
-            float oz=float(int((n.seed>>8)&31u)-15);
-            n.goal={n.p.x+ox,0.0f,n.p.z+oz};
-            if((n.seed&3u)==0u) n.idleTimer=0.7f+float((n.seed>>5)&7u)*0.15f;
-        } else {
-            float inv=1.0f/std::sqrt(d2);
-            n.heading=std::atan2(dx,dz);
-            n.p.x+=dx*inv*n.speed*dt;
-            n.p.z+=dz*inv*n.speed*dt;
-            n.walkPhase+=dt*(4.0f+n.speed*2.0f);
+
+        if(d2<1.6f) {
+            m110ChooseNpcGoal(n);
+            dx=n.goal.x-n.p.x;
+            dz=n.goal.z-n.p.z;
+            d2=dx*dx+dz*dz;
+        }
+
+        if(d2>0.001f) {
+            const float inv=1.0f/std::sqrt(d2);
+            n.targetHeading=std::atan2(dx,dz);
+
+            // Smooth turning and acceleration instead of instant robotic snaps.
+            const float turn=m110WrapAngle(n.targetHeading-n.heading);
+            n.heading=m110WrapAngle(n.heading+turn*std::min(1.0f,dt*4.5f));
+            n.speed=m110Approach(n.speed,n.targetSpeed,dt*1.8f);
+
+            n.p.x+=std::sin(n.heading)*n.speed*dt;
+            n.p.z+=std::cos(n.heading)*n.speed*dt;
+            n.walkPhase+=dt*(3.2f+n.speed*2.4f);
         }
     }
 }
 
-static void m91DrawNpc(const M91Npc& n,const Camera& cam) {
-    const unsigned jeans=static_cast<unsigned>(RGBA8(45+int(n.seed&15u),55,75,255));
-    const unsigned shirt=static_cast<unsigned>(RGBA8(85+int((n.seed>>4)&55u),50+int((n.seed>>10)&35u),65+int((n.seed>>15)&30u),255));
-    const unsigned skin=static_cast<unsigned>(RGBA8(188,149,116,255));
-    const unsigned hair=static_cast<unsigned>(RGBA8(45,37,33,255));
-    const unsigned shoes=static_cast<unsigned>(RGBA8(28,29,31,255));
-
-    const float swing=std::sin(n.walkPhase)*0.10f;
-    const float sn=std::sin(n.heading), cs=std::cos(n.heading);
+static void m110DrawHumanFigure(const Vec3& base,float heading,float phase,
+                                float heightScale,
+                                unsigned pants,unsigned top,
+                                unsigned skin,unsigned hair,unsigned shoes,
+                                const Camera& cam) {
+    const float sn=std::sin(heading), cs=std::cos(heading);
+    const float swing=std::sin(phase)*0.14f;
+    const float armSwing=-swing*0.78f;
 
     auto wp=[&](float side,float up,float fwd)->Vec3 {
-        return {n.p.x+cs*side+sn*fwd,gM102WorldBaseY+n.p.y+up,n.p.z-sn*side+cs*fwd};
+        return {base.x+cs*side+sn*fwd,
+                base.y+up*heightScale,
+                base.z-sn*side+cs*fwd};
     };
 
-    // Rounded low-poly body: no cube torso/head.
-    prismPool(wp(-0.15f,0.00f, swing),0.12f,0.76f,8,cam,jeans,jeans,jeans);
-    prismPool(wp( 0.15f,0.00f,-swing),0.12f,0.76f,8,cam,jeans,jeans,jeans);
-    prismPool(wp(-0.15f,0.00f, swing+0.07f),0.15f,0.16f,8,cam,shoes,shoes,shoes);
-    prismPool(wp( 0.15f,0.00f,-swing+0.07f),0.15f,0.16f,8,cam,shoes,shoes,shoes);
+    // Shoes / feet.
+    prismPool(wp(-0.145f,0.00f,swing+0.055f),0.13f,0.13f*heightScale,10,cam,shoes,shoes,shoes);
+    prismPool(wp( 0.145f,0.00f,-swing+0.055f),0.13f,0.13f*heightScale,10,cam,shoes,shoes,shoes);
 
-    prismPool(wp(0.0f,0.72f,0.0f),0.34f,0.76f,10,cam,shirt,shirt,shirt);
-    prismPool(wp(-0.39f,0.79f,-swing),0.075f,0.64f,8,cam,skin,skin,skin);
-    prismPool(wp( 0.39f,0.79f, swing),0.075f,0.64f,8,cam,skin,skin,skin);
+    // Lower + upper legs, slight knee separation for more human silhouette.
+    prismPool(wp(-0.145f,0.12f,swing*0.60f),0.105f,0.38f*heightScale,10,cam,pants,pants,pants);
+    prismPool(wp( 0.145f,0.12f,-swing*0.60f),0.105f,0.38f*heightScale,10,cam,pants,pants,pants);
+    prismPool(wp(-0.145f,0.48f,swing*0.25f),0.125f,0.40f*heightScale,10,cam,pants,pants,pants);
+    prismPool(wp( 0.145f,0.48f,-swing*0.25f),0.125f,0.40f*heightScale,10,cam,pants,pants,pants);
 
-    prismPool(wp(0.0f,1.46f,0.0f),0.23f,0.42f,12,cam,skin,skin,skin);
-    prismPool(wp(0.0f,1.80f,-0.01f),0.235f,0.08f,12,cam,hair,hair,hair);
+    // Hips + tapered torso built from layered rounded sections.
+    prismPool(wp(0.0f,0.82f,0.0f),0.29f,0.23f*heightScale,12,cam,pants,pants,pants);
+    prismPool(wp(0.0f,1.00f,0.0f),0.34f,0.42f*heightScale,12,cam,top,top,top);
+    prismPool(wp(0.0f,1.35f,0.0f),0.39f,0.23f*heightScale,12,cam,top,top,top);
+
+    // Shoulders and two-part arms.
+    prismPool(wp(-0.42f,1.23f,armSwing*0.55f),0.080f,0.34f*heightScale,10,cam,top,top,top);
+    prismPool(wp( 0.42f,1.23f,-armSwing*0.55f),0.080f,0.34f*heightScale,10,cam,top,top,top);
+    prismPool(wp(-0.43f,0.94f,armSwing),0.070f,0.31f*heightScale,10,cam,skin,skin,skin);
+    prismPool(wp( 0.43f,0.94f,-armSwing),0.070f,0.31f*heightScale,10,cam,skin,skin,skin);
+    prismPool(wp(-0.43f,0.91f,armSwing),0.085f,0.10f*heightScale,10,cam,skin,skin,skin);
+    prismPool(wp( 0.43f,0.91f,-armSwing),0.085f,0.10f*heightScale,10,cam,skin,skin,skin);
+
+    // Neck + head + hair.
+    prismPool(wp(0.0f,1.52f,0.0f),0.095f,0.13f*heightScale,10,cam,skin,skin,skin);
+    prismPool(wp(0.0f,1.62f,0.0f),0.225f,0.39f*heightScale,12,cam,skin,skin,skin);
+    prismPool(wp(0.0f,1.94f,-0.015f),0.23f,0.075f*heightScale,12,cam,hair,hair,hair);
+}
+
+static void m91DrawNpc(const M91Npc& n,const Camera& cam) {
+    const unsigned jeans=static_cast<unsigned>(RGBA8(42+int(n.seed&18u),53,72,255));
+    const unsigned shirt=static_cast<unsigned>(RGBA8(78+int((n.seed>>4)&65u),
+                                                       58+int((n.seed>>10)&45u),
+                                                       62+int((n.seed>>15)&40u),255));
+    const unsigned skin=static_cast<unsigned>(RGBA8(188,149,116,255));
+    const unsigned hair=static_cast<unsigned>(RGBA8(42+int((n.seed>>19)&18u),35,31,255));
+    const unsigned shoes=static_cast<unsigned>(RGBA8(25,27,30,255));
+    const float bodyScale=0.92f+float((n.seed>>22)&7u)*0.015f;
+
+    const Vec3 base={n.p.x,gM102WorldBaseY+n.p.y,n.p.z};
+    m110DrawHumanFigure(base,n.heading,n.walkPhase,bodyScale,
+                        jeans,shirt,skin,hair,shoes,cam);
 }
 
 static void m91DrawNpcs(const Camera& cam) {
@@ -1074,7 +1181,6 @@ static void m91DrawNpcs(const Camera& cam) {
 }
 
 static void m91BuildingDetail(const Vec3& p,float sx,float sy,float sz,const Camera& cam) {
-    // Extra true-3D geometry: roof lip, doorway, window strips, small awning.
     const unsigned trim=static_cast<unsigned>(RGBA8(82,86,90,255));
     const unsigned glass=static_cast<unsigned>(RGBA8(92,132,151,255));
     const unsigned door=static_cast<unsigned>(RGBA8(58,48,42,255));
@@ -1091,7 +1197,6 @@ static void m91BuildingDetail(const Vec3& p,float sx,float sy,float sz,const Cam
 }
 
 static void m91DetailedBlock(const Camera& cam) {
-    // High-detail demonstration buildings close to the known spawn.
     const unsigned wallA=static_cast<unsigned>(RGBA8(151,143,132,255));
     const unsigned wallB=static_cast<unsigned>(RGBA8(112,105,96,255));
     const unsigned roof=static_cast<unsigned>(RGBA8(179,169,154,255));
@@ -1104,15 +1209,14 @@ static void m91DetailedBlock(const Camera& cam) {
     m91BuildingDetail(b,14.0f,18.0f,13.0f,cam);
 }
 
-static void m91Frame(const Camera& cam) {
-    // Fixed prototype step avoids touching the already-confirmed M81/M84 input loop.
-    // Later this can receive the game's real dt.
-    m91UpdateNpcs(cam,1.0f/30.0f);
+static void m91Frame(const Camera& cam,const Player& player) {
+    // M110 lightweight pedestrian AI. Keep a fixed 30 FPS simulation step
+    // to avoid touching the physically confirmed input/game loop.
+    m91UpdateNpcs(cam,player,1.0f/30.0f);
     m91DrawNpcs(cam);
     if(std::fabs(cam.position.x)<90.0f && std::fabs(cam.position.z)<90.0f)
         m91DetailedBlock(cam);
 }
-
 
 // M96 fixed map scenery -------------------------------------------------------
 // These mountains are VISUAL landmarks anchored to fixed world coordinates.
@@ -1173,58 +1277,32 @@ static void m96FixedMountainScenery(const Camera& cam) {
 static void m97DrawDash(const Player& player,const Camera& cam) {
     if(player.inVehicle) return;
 
-    const float x=player.position.x;
-    const float y=player.position.y;
-    const float z=player.position.z;
-    const float a=player.heading;
-    const float sn=std::sin(a), cs=std::cos(a);
-
     const float speed=std::sqrt(player.velocity.x*player.velocity.x+
                                 player.velocity.z*player.velocity.z);
     static float walkPhase=0.0f;
-    if(speed>0.15f) walkPhase += 0.16f + std::min(speed,6.5f)*0.025f;
-    const float swing=(speed>0.15f)?std::sin(walkPhase)*0.12f:0.0f;
+
+    if(speed>0.12f)
+        walkPhase += (1.0f/30.0f)*(4.2f+std::min(speed,6.5f)*1.0f);
 
     const unsigned pants=static_cast<unsigned>(RGBA8(34,39,48,255));
     const unsigned shoes=static_cast<unsigned>(RGBA8(20,21,24,255));
     const unsigned jacket=static_cast<unsigned>(RGBA8(48,57,70,255));
-    const unsigned shirt=static_cast<unsigned>(RGBA8(171,47,47,255));
     const unsigned skin=static_cast<unsigned>(RGBA8(188,143,112,255));
     const unsigned hair=static_cast<unsigned>(RGBA8(37,31,29,255));
 
-    auto wp=[&](float side,float up,float fwd)->Vec3 {
-        return {x+cs*side+sn*fwd,y+up,z-sn*side+cs*fwd};
-    };
-
-    // More human silhouette: rounded 8/10/12-sided components.
-    prismPool(wp(-0.17f,0.00f, swing),0.13f,0.86f,8,cam,pants,pants,pants);
-    prismPool(wp( 0.17f,0.00f,-swing),0.13f,0.86f,8,cam,pants,pants,pants);
-    prismPool(wp(-0.17f,0.00f, swing+0.09f),0.16f,0.18f,8,cam,shoes,shoes,shoes);
-    prismPool(wp( 0.17f,0.00f,-swing+0.09f),0.16f,0.18f,8,cam,shoes,shoes,shoes);
-
-    prismPool(wp(0.0f,0.82f,0.0f),0.38f,0.78f,10,cam,jacket,jacket,jacket);
-    // red shirt visible in front
-    m99TexturedQuad(wp(-0.15f,0.96f,0.37f),wp(0.15f,0.96f,0.37f),
-                    wp(0.15f,1.42f,0.37f),wp(-0.15f,1.42f,0.37f),
-                    cam,M99_WALL,shirt);
-
-    prismPool(wp(-0.46f,0.88f,-swing),0.085f,0.70f,8,cam,jacket,jacket,jacket);
-    prismPool(wp( 0.46f,0.88f, swing),0.085f,0.70f,8,cam,jacket,jacket,jacket);
-    prismPool(wp(-0.46f,0.86f,-swing),0.09f,0.13f,8,cam,skin,skin,skin);
-    prismPool(wp( 0.46f,0.86f, swing),0.09f,0.13f,8,cam,skin,skin,skin);
-
-    prismPool(wp(0.0f,1.55f,0.0f),0.25f,0.46f,12,cam,skin,skin,skin);
-    prismPool(wp(0.0f,1.92f,-0.01f),0.26f,0.09f,12,cam,hair,hair,hair);
+    // M110: articulated, rounded low-poly human proportions.
+    m110DrawHumanFigure(player.position,player.heading,walkPhase,1.0f,
+                        pants,jacket,skin,hair,shoes,cam);
 }
 
-void drawTestCity(const Camera& cam) {
+void drawTestCity(const Camera& cam,const Player& player) {
     // Full 120 x 120 km world through streaming.
     drawM90FullMapStream(cam);
 
     // M98: the old M89 block is NOT drawn on top of M90 anymore.
     // It caused duplicated roads/buildings and visible spawn/overlap glitches.
     // M90 is now the single world-layout source around the player.
-    m91Frame(cam);
+    m91Frame(cam,player);
 
     // M96: REMOVED camera-following terrain/landmarks.
     // They made scenery appear to move with the camera and the visual terrain
@@ -1238,6 +1316,31 @@ void drawTestCity(const Camera& cam) {
 // M94: coordinate HUD is independent from the Dev Menu panel.
 // It stays in the upper-right corner and can be toggled from Dev Menu.
 static vita2d_pgf* gM94DebugFont = nullptr;
+
+static float gM109HudHeading=0.0f;
+static bool gM109HudHeadingReady=false;
+
+static float m109WrapAngle(float a){
+    const float twoPi=6.28318530718f;
+    while(a>3.14159265359f) a-=twoPi;
+    while(a<-3.14159265359f) a+=twoPi;
+    return a;
+}
+static void m109UpdateHudHeading(float target,float fps){
+    if(!gM109HudHeadingReady){
+        gM109HudHeading=target;
+        gM109HudHeadingReady=true;
+        return;
+    }
+    float dt=(fps>1.0f&&fps<240.0f)?(1.0f/fps):(1.0f/30.0f);
+    if(dt<0.001f) dt=0.001f;
+    if(dt>0.05f) dt=0.05f;
+    const float diff=m109WrapAngle(target-gM109HudHeading);
+    float alpha=dt*9.0f;
+    if(alpha>1.0f) alpha=1.0f;
+    gM109HudHeading=m109WrapAngle(gM109HudHeading+diff*alpha);
+}
+
 
 static void m94DrawCoordinatesHud(const Player& player) {
     if(!DevDebugState::coordinatesHudEnabled() || !gM94DebugFont) return;
@@ -1278,41 +1381,47 @@ static const char* m107Cardinal(float heading) {
 static void m107DrawCompass(const Player& player) {
     if(!gM94DebugFont) return;
 
-    const float x = 330.0f;
-    const float y = 14.0f;
-    const float w = 300.0f;
-    const float h = 42.0f;
-
-    // Dark translucent bar.
+    const float x=330.0f,y=14.0f,w=300.0f,h=42.0f;
+    const float center=x+w*0.5f;
     vita2d_draw_rectangle(x,y,w,h,RGBA8(0,0,0,155));
     vita2d_draw_rectangle(x,y,w,2.0f,RGBA8(210,55,55,255));
+    vita2d_draw_rectangle(center-1.0f,y+4.0f,2.0f,13.0f,RGBA8(255,255,255,255));
 
-    // Center pointer.
-    vita2d_draw_rectangle(x+w*0.5f-1.0f,y+5.0f,2.0f,11.0f,RGBA8(255,255,255,255));
-    vita2d_draw_rectangle(x+w*0.5f-4.0f,y+5.0f,8.0f,2.0f,RGBA8(255,255,255,255));
+    const float twoPi=6.28318530718f;
+    float a=std::fmod(gM109HudHeading,twoPi);
+    if(a<0.0f) a+=twoPi;
+    const float deg=a*57.295779513f;
+    const float pxPerDeg=25.0f/15.0f;
+    const int baseTick=int(std::floor(deg/15.0f));
 
-    // Main direction label.
-    const char* dir = m107Cardinal(player.heading);
-    vita2d_pgf_draw_text(gM94DebugFont,
-                         x+w*0.5f-10.0f,y+34.0f,
-                         RGBA8(255,255,255,255),0.85f,dir);
+    static const char* labels[24]={
+        "N","","","NE","","","E","","","SE","","",
+        "S","","","SW","","","W","","","NW","",""
+    };
 
-    // Neighboring cardinal hints.
-    float a = std::fmod(player.heading, 6.28318530718f);
-    if(a < 0.0f) a += 6.28318530718f;
-    const float deg = a * 57.295779513f;
+    for(int i=-7;i<=7;i++){
+        int tick=baseTick+i;
+        int wrapped=tick%24;
+        if(wrapped<0) wrapped+=24;
+        const float tx=center+(float(tick*15)-deg)*pxPerDeg;
+        if(tx<x+8.0f||tx>x+w-8.0f) continue;
+
+        const bool major=(wrapped%3)==0;
+        vita2d_draw_rectangle(tx-0.5f,y+17.0f,1.0f,major?9.0f:5.0f,
+                              major?RGBA8(240,240,240,255):RGBA8(155,165,175,255));
+        if(major&&labels[wrapped][0]!='\0'){
+            vita2d_pgf_draw_text(gM94DebugFont,tx-10.0f,y+38.0f,
+                                 wrapped==0?RGBA8(120,255,120,255):RGBA8(235,235,235,255),
+                                 0.62f,labels[wrapped]);
+        }
+    }
 
     char degText[32];
     std::snprintf(degText,sizeof(degText),"%03d",int(deg+0.5f)%360);
-    vita2d_pgf_draw_text(gM94DebugFont,
-                         x+18.0f,y+30.0f,
-                         RGBA8(205,215,225,255),0.62f,degText);
-
-    // Fixed orientation letters help while rotating.
-    vita2d_pgf_draw_text(gM94DebugFont,x+78.0f, y+30.0f,RGBA8(170,180,190,255),0.56f,"W");
-    vita2d_pgf_draw_text(gM94DebugFont,x+216.0f,y+30.0f,RGBA8(170,180,190,255),0.56f,"E");
+    vita2d_pgf_draw_text(gM94DebugFont,center-14.0f,y+15.0f,
+                         RGBA8(255,255,255,255),0.58f,degText);
+    (void)player;
 }
-
 
 // M108 -----------------------------------------------------------------------
 // Lightweight top-left minimap. It is procedural HUD geometry, not a full PNG,
@@ -1326,7 +1435,7 @@ static void m108RotateToMap(float wx,float wz,
     const float dz=wz-player.position.z;
 
     // Rotate world around player so "forward" is always up on the minimap.
-    const float a=-player.heading;
+    const float a=-gM109HudHeading;
     const float ca=std::cos(a), sa=std::sin(a);
     const float rx=dx*ca-dz*sa;
     const float rz=dx*sa+dz*ca;
@@ -1580,7 +1689,7 @@ void VitaRenderer::draw(const Player& player,
 
     // M90 full-map Vita streaming: pure geometry only.
     // Buildings use separated lots so their footprints never overlap.
-    drawTestCity(camera);
+    drawTestCity(camera,player);
 
     // Tiny center marker.
     vita2d_draw_rectangle(
@@ -1588,7 +1697,8 @@ void VitaRenderer::draw(const Player& player,
         static_cast<unsigned>(RGBA8(255,255,255,255))
     );
 
-    // M108: minimap top-left + M107 compass top-center.
+    // M109: smooth shared heading for compass and minimap.
+    m109UpdateHudHeading(player.heading,fps);
     m108DrawMiniMap(player);
     m107DrawCompass(player);
     m94DrawCoordinatesHud(player);
