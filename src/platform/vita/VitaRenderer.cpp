@@ -1376,7 +1376,7 @@ static void m108DrawMiniMap(const Player& player) {
             ax+=cx; ay+=cy; bx+=cx; by+=cy;
             if((ax<mx&&bx<mx)||(ax>mx+mw&&bx>mx+mw)||
                (ay<my&&by<my)||(ay>my+mh&&by>my+mh)) continue;
-            vita2d_draw_line(ax,ay,bx,by,roadHalf*scale*2.0f,RGBA8(35,38,41,255));
+            vita2d_draw_line(ax,ay,bx,by,RGBA8(35,38,41,255));
         }
     }
 
@@ -1391,7 +1391,7 @@ static void m108DrawMiniMap(const Player& player) {
             ax+=cx; ay+=cy; bx+=cx; by+=cy;
             if((ax<mx&&bx<mx)||(ax>mx+mw&&bx>mx+mw)||
                (ay<my&&by<my)||(ay>my+mh&&by>my+mh)) continue;
-            vita2d_draw_line(ax,ay,bx,by,roadHalf*scale*2.0f,RGBA8(35,38,41,255));
+            vita2d_draw_line(ax,ay,bx,by,RGBA8(35,38,41,255));
         }
     }
 
@@ -1450,9 +1450,9 @@ static void m108DrawMiniMap(const Player& player) {
     vita2d_draw_fill_circle(cx,cy,5.5f,RGBA8(255,255,255,255));
 
     // Forward pointer triangle using simple 2D lines.
-    vita2d_draw_line(cx,cy-13.0f,cx-6.0f,cy-2.0f,2.0f,RGBA8(255,255,255,255));
-    vita2d_draw_line(cx,cy-13.0f,cx+6.0f,cy-2.0f,2.0f,RGBA8(255,255,255,255));
-    vita2d_draw_line(cx-6.0f,cy-2.0f,cx+6.0f,cy-2.0f,2.0f,RGBA8(255,255,255,255));
+    vita2d_draw_line(cx,cy-13.0f,cx-6.0f,cy-2.0f,RGBA8(255,255,255,255));
+    vita2d_draw_line(cx,cy-13.0f,cx+6.0f,cy-2.0f,RGBA8(255,255,255,255));
+    vita2d_draw_line(cx-6.0f,cy-2.0f,cx+6.0f,cy-2.0f,RGBA8(255,255,255,255));
 
     // North indicator.
     if(gM94DebugFont) {
