@@ -5,6 +5,137 @@
 #include <cmath>
 #include <algorithm>
 
+
+// M106 explicit building collision -------------------------------------------
+// This mirrors the deterministic M90/M98 building lot placement used by the
+// Vita renderer. Open terrain stays walkable; only actual building footprints
+// block Dash.
+//
+// Keeping this here avoids reusing WorldCollisionSystem::resolvePlayerMove(),
+// which previously treated broad off-road areas as blocked.
+
+static const float M106_CELL = 64.0f;
+static const float M106_PLAYER_RADIUS = 0.34f;
+
+struct M106Building {
+    float x,z,sx,sz;
+};
+
+static unsigned m106Hash(int x,int z) {
+    unsigned h=static_cast<unsigned>(x)*0x8da6b343u;
+    h^=static_cast<unsigned>(z)*0xd8163841u;
+    h^=(h>>13);
+    h*=0x85ebca6bu;
+    return h^(h>>16);
+}
+
+static int m106Region(float x,float z) {
+    if(z < -42000.0f) return 0;
+    if(z > 42000.0f && x > 10000.0f) return 1;
+    if(z > 35000.0f && x < -15000.0f) return 2;
+    if(x > 43000.0f || x < -43000.0f) return 3;
+    if(z > 25000.0f) return 4;
+    return 5;
+}
+
+static bool m106NearRoadX(int cx,float x) {
+    if((cx%4)!=0) return false;
+    const float rx=float(cx)*M106_CELL+32.0f;
+    return std::fabs(x-rx)<8.0f;
+}
+
+static bool m106NearRoadZ(int cz,float z) {
+    if((cz%4)!=0) return false;
+    const float rz=float(cz)*M106_CELL+32.0f;
+    return std::fabs(z-rz)<8.0f;
+}
+
+static bool m106OverlapPlaced(const M106Building* placed,int count,
+                              float x,float z,float sx,float sz) {
+    const float gap=4.0f;
+    const float ahx=sx*0.5f;
+    const float ahz=sz*0.5f;
+    for(int i=0;i<count;i++) {
+        const float bhx=placed[i].sx*0.5f;
+        const float bhz=placed[i].sz*0.5f;
+        if(std::fabs(x-placed[i].x) < ahx+bhx+gap &&
+           std::fabs(z-placed[i].z) < ahz+bhz+gap)
+            return true;
+    }
+    return false;
+}
+
+static int m106BuildingsForCell(int cx,int cz,M106Building out[4]) {
+    const float x0=float(cx)*M106_CELL;
+    const float z0=float(cz)*M106_CELL;
+    const unsigned h=m106Hash(cx,cz);
+    const int region=m106Region(x0+32.0f,z0+32.0f);
+
+    unsigned density=0;
+    if(region==5) density=2;
+    else if(region==4 || region==3) density=((h>>4)&1u);
+    else density=((h&7u)==0u)?1u:0u;
+
+    static const float lotX[4]={12.0f,52.0f,12.0f,52.0f};
+    static const float lotZ[4]={12.0f,12.0f,52.0f,52.0f};
+
+    int count=0;
+    for(unsigned i=0;i<density && i<4u;i++) {
+        const unsigned q=m106Hash(cx*31+int(i)*17,cz*37+int(i)*23);
+        const float sx=8.0f+float((q>>16)%4u);
+        const float sz=8.0f+float((q>>20)%4u);
+
+        const int li=int((q+i)%4u);
+        float bx=x0+lotX[li]+(float((q>>5)%5u)-2.0f)*0.45f;
+        float bz=z0+lotZ[li]+(float((q>>9)%5u)-2.0f)*0.45f;
+
+        if(m106NearRoadX(cx,bx))
+            bx=(bx<x0+32.0f)?x0+12.0f:x0+52.0f;
+        if(m106NearRoadZ(cz,bz))
+            bz=(bz<z0+32.0f)?z0+12.0f:z0+52.0f;
+
+        if(m106OverlapPlaced(out,count,bx,bz,sx,sz))
+            continue;
+
+        out[count++]={bx,bz,sx,sz};
+    }
+    return count;
+}
+
+static bool m106HitsBuilding(float x,float z) {
+    const int cx=int(std::floor(x/M106_CELL));
+    const int cz=int(std::floor(z/M106_CELL));
+
+    // Check neighboring cells too so collision stays correct on cell borders.
+    for(int dz=-1;dz<=1;dz++) {
+        for(int dx=-1;dx<=1;dx++) {
+            M106Building buildings[4];
+            const int count=m106BuildingsForCell(cx+dx,cz+dz,buildings);
+            for(int i=0;i<count;i++) {
+                const float hx=buildings[i].sx*0.5f+M106_PLAYER_RADIUS;
+                const float hz=buildings[i].sz*0.5f+M106_PLAYER_RADIUS;
+                if(std::fabs(x-buildings[i].x)<hx &&
+                   std::fabs(z-buildings[i].z)<hz)
+                    return true;
+            }
+        }
+    }
+    return false;
+}
+
+static Vec3 m106ResolveBuildings(const Vec3& from,const Vec3& desired) {
+    Vec3 out=from;
+
+    // Axis-separated collision gives natural wall sliding.
+    if(!m106HitsBuilding(desired.x,from.z))
+        out.x=desired.x;
+
+    if(!m106HitsBuilding(out.x,desired.z))
+        out.z=desired.z;
+
+    return out;
+}
+
 void Player::updateState(const InputState& in,float mag,float speed){
     if(!grounded_) moveState_=verticalVelocity_>0?PlayerMoveState::Jump:PlayerMoveState::Fall;
     else if(mag<=0.05f) moveState_=PlayerMoveState::Idle;
@@ -44,8 +175,11 @@ void Player::updateWorld(const InputState& in,float dt,const EnvironmentSystem& 
         //
         // Building/wall collision can be reintroduced later with explicit
         // obstacle volumes instead of using the whole world-cell resolver.
-        position.x=horizontalDesired.x;
-        position.z=horizontalDesired.z;
+        // M106: grass/roads remain fully walkable, but actual deterministic
+        // building footprints block the player.
+        const Vec3 resolved=m106ResolveBuildings(position,horizontalDesired);
+        position.x=resolved.x;
+        position.z=resolved.z;
 
         // Keep Dash exactly on the terrain surface.
         position.y=collisions.groundHeight(position.x,position.z,environment);
@@ -53,8 +187,9 @@ void Player::updateWorld(const InputState& in,float dt,const EnvironmentSystem& 
     } else {
         // M105: keep air steering free over terrain too, while gravity/landing
         // still use the collision-ground height.
-        position.x=horizontalDesired.x;
-        position.z=horizontalDesired.z;
+        const Vec3 airResolved=m106ResolveBuildings(position,horizontalDesired);
+        position.x=airResolved.x;
+        position.z=airResolved.z;
         verticalVelocity_-=15.5f*dt; position.y+=verticalVelocity_*dt;
         float landingGround=collisions.groundHeight(position.x,position.z,environment);
         if(position.y<=landingGround){
