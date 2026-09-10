@@ -543,6 +543,16 @@ static unsigned m90GroundColor(int region,unsigned h) {
 
 
 // M98 world-detail helpers ---------------------------------------------------
+// M101B compile-order declarations ------------------------------------------
+static void prismPool(const Vec3& c,float radius,float sy,int sides,
+                      const Camera& cam,unsigned wallA,unsigned wallB,unsigned top);
+
+struct M95PlacedBuilding {
+    float x,z,sx,sz;
+};
+static bool m95CanPlace(const M95PlacedBuilding* placed,int count,
+                        float x,float z,float sx,float sz);
+
 static void m98Tree(float x,float z,const Camera& cam,unsigned seed) {
     const unsigned trunkA=static_cast<unsigned>(RGBA8(89,62,42,255));
     const unsigned trunkB=static_cast<unsigned>(RGBA8(65,44,30,255));
@@ -805,8 +815,8 @@ static unsigned m92TerrainColor(M92Region r,float h) {
 static void prismPool(const Vec3& c,float radius,float sy,int sides,
                       const Camera& cam,unsigned wallA,unsigned wallB,unsigned top) {
     if(sides<5) sides=5;
-    if(sides>10) sides=10;
-    Vec3 ring0[10], ring1[10];
+    if(sides>12) sides=12;
+    Vec3 ring0[12], ring1[12];
     for(int i=0;i<sides;i++) {
         const float a=6.283185307f*float(i)/float(sides);
         ring0[i]={c.x+std::cos(a)*radius,c.y,c.z+std::sin(a)*radius};
@@ -1257,9 +1267,6 @@ static bool m95RectsOverlap(float ax,float az,float ahx,float ahz,
     return std::fabs(ax-bx) < (ahx+bhx+gap) &&
            std::fabs(az-bz) < (ahz+bhz+gap);
 }
-struct M95PlacedBuilding {
-    float x,z,sx,sz;
-};
 static bool m95CanPlace(const M95PlacedBuilding* placed,int count,
                         float x,float z,float sx,float sz) {
     // Extra clearance makes buildings visibly separate on original Vita.
