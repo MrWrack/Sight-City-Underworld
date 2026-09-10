@@ -55,6 +55,34 @@ static void makeCameraRelative(InputState& in,const Camera& camera) {
 }
 
 
+
+// M104: perform the same grounded-state reset that already works when
+// returning from a vehicle/fly-like state, while preserving Dash's exact X/Z
+// and heading. A temporary Vehicle is used only as a safe public API bridge
+// to Player::exitVehicle(), which sets grounded_=true internally.
+static void m104ForceGrounded(Player& player,float groundY) {
+    const Vec3 desired = player.position;
+    const float h = player.heading;
+
+    Vehicle groundingProxy;
+    groundingProxy.heading = h;
+    groundingProxy.position = {
+        desired.x - std::cos(h) * 1.5f,
+        groundY,
+        desired.z + std::sin(h) * 1.5f
+    };
+
+    player.inVehicle = true;
+    player.exitVehicle(groundingProxy);
+
+    // Keep the exact requested spawn/world position.
+    player.position.x = desired.x;
+    player.position.z = desired.z;
+    player.position.y = groundY;
+    player.heading = h;
+    player.velocity = {0.0f,0.0f,0.0f};
+}
+
 enum class M101MenuScreen { Main, Settings };
 
 static void m101DrawButton(vita2d_pgf* font,float x,float y,float w,float h,
@@ -198,13 +226,17 @@ int main() {
         return 0;
     }
 
-    // M101: build collision data first, then put Dash exactly on the real floor.
+    // M104: build collision first, then initialize BOTH position and the
+    // internal grounded physics state. This removes the need to toggle Fly Mode
+    // once after every fresh spawn.
     environment.stream(player.position,3);
     sightMap.stream(player.position,3);
     collisions.rebuild(environment,sightMap);
-    player.position.y=collisions.groundHeight(player.position.x,player.position.z,environment);
-    player.velocity={0.0f,0.0f,0.0f};
+    const float spawnGroundY =
+        collisions.groundHeight(player.position.x,player.position.z,environment);
+    m104ForceGrounded(player,spawnGroundY);
 
+    bool m104WasFlyMode=false;
     const float dt=1.0f/30.0f; // Vita target: stable 30 fps.
     while(!controls.quitRequested()) {
         // Temporary developer menu. SELECT opens/closes it.
@@ -215,6 +247,16 @@ int main() {
         }
 
         InputState in=controls.poll(settings,player.inVehicle);
+
+        // M104: when Fly Mode changes from ON -> OFF, do the exact same
+        // full grounded-state reset automatically.
+        const bool m104FlyNow=devMenu.flyMode();
+        if(m104WasFlyMode && !m104FlyNow && !player.inVehicle) {
+            const float groundY =
+                collisions.groundHeight(player.position.x,player.position.z,environment);
+            m104ForceGrounded(player,groundY);
+        }
+        m104WasFlyMode=m104FlyNow;
 
         // M84 temporary fly controls:
         // X = rise, Circle = descend.
@@ -267,12 +309,15 @@ int main() {
                 player.updateWorld(in,dt,environment,collisions);
             }
         }
-        // M102: after normal on-foot physics, keep Dash exactly on collision ground.
-        // Fly Mode is intentionally excluded.
+        // M103 anti-stuck floor safety:
+        // Let Player::updateWorld()/M71 handle normal grounded movement.
+        // Only recover if Dash falls materially BELOW the collision floor.
         if(!devMenu.flyMode() && !player.inVehicle) {
-            const float groundY=collisions.groundHeight(player.position.x,player.position.z,environment);
-            if(std::fabs(player.position.y-groundY)<1.25f || player.position.y<groundY) {
+            const float groundY=collisions.groundHeight(
+                player.position.x,player.position.z,environment);
+            if(player.position.y < groundY - 0.20f) {
                 player.position.y=groundY;
+                player.velocity.y=0.0f;
             }
         }
 
