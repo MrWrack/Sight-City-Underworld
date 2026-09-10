@@ -581,27 +581,27 @@ static void m111Tree(float x,float z,const Camera& cam,unsigned seed) {
 
     // Thin trunk with two branch stubs.
     prismPool({x,gM102WorldBaseY,z},0.16f,3.05f,10,cam,trunkA,trunkB,trunkA);
-    prismPool({x-0.22f,1.90f,z},0.07f,0.72f,8,cam,trunkA,trunkB,trunkA);
-    prismPool({x+0.24f,2.02f,z-0.08f},0.07f,0.64f,8,cam,trunkA,trunkB,trunkA);
+    prismPool({x-0.22f,gM102WorldBaseY+1.90f,z},0.07f,0.72f,8,cam,trunkA,trunkB,trunkA);
+    prismPool({x+0.24f,gM102WorldBaseY+2.02f,z-0.08f},0.07f,0.64f,8,cam,trunkA,trunkB,trunkA);
 
     // M111: fuller, asymmetric low-poly crown for a less blocky silhouette.
-    prismPool({x,2.25f,z},0.74f,1.15f,12,cam,leafA,leafB,leafC);
-    prismPool({x-0.62f,2.48f,z+0.18f},0.56f,0.88f,10,cam,leafB,leafA,leafC);
-    prismPool({x+0.60f,2.55f,z-0.12f},0.58f,0.92f,10,cam,leafC,leafB,leafA);
-    prismPool({x-0.18f,3.10f,z-0.34f},0.55f,0.88f,12,cam,leafA,leafC,leafB);
-    prismPool({x+0.24f,3.28f,z+0.30f},0.48f,0.74f,10,cam,leafC,leafA,leafB);
-    prismPool({x-0.46f,2.92f,z-0.48f},0.42f,0.64f,10,cam,leafB,leafC,leafA);
-    prismPool({x+0.48f,2.92f,z+0.48f},0.40f,0.62f,10,cam,leafA,leafB,leafC);
+    prismPool({x,gM102WorldBaseY+2.25f,z},0.74f,1.15f,12,cam,leafA,leafB,leafC);
+    prismPool({x-0.62f,gM102WorldBaseY+2.48f,z+0.18f},0.56f,0.88f,10,cam,leafB,leafA,leafC);
+    prismPool({x+0.60f,gM102WorldBaseY+2.55f,z-0.12f},0.58f,0.92f,10,cam,leafC,leafB,leafA);
+    prismPool({x-0.18f,gM102WorldBaseY+3.10f,z-0.34f},0.55f,0.88f,12,cam,leafA,leafC,leafB);
+    prismPool({x+0.24f,gM102WorldBaseY+3.28f,z+0.30f},0.48f,0.74f,10,cam,leafC,leafA,leafB);
+    prismPool({x-0.46f,gM102WorldBaseY+2.92f,z-0.48f},0.42f,0.64f,10,cam,leafB,leafC,leafA);
+    prismPool({x+0.48f,gM102WorldBaseY+2.92f,z+0.48f},0.40f,0.62f,10,cam,leafA,leafB,leafC);
 
     // Bark and foliage texture overlays.
     m99TexturedQuad({x-0.13f,gM102WorldBaseY,z-0.18f},{x+0.13f,gM102WorldBaseY,z-0.18f},
-                    {x+0.13f,3.02f,z-0.18f},{x-0.13f,3.02f,z-0.18f},
+                    {x+0.13f,gM102WorldBaseY+3.02f,z-0.18f},{x-0.13f,gM102WorldBaseY+3.02f,z-0.18f},
                     cam,M99_BARK,trunkA);
-    m99TexturedQuad({x-1.05f,2.22f,z-0.08f},{x+1.05f,2.22f,z-0.08f},
-                    {x+1.05f,4.02f,z-0.08f},{x-1.05f,4.02f,z-0.08f},
+    m99TexturedQuad({x-1.05f,gM102WorldBaseY+2.22f,z-0.08f},{x+1.05f,gM102WorldBaseY+2.22f,z-0.08f},
+                    {x+1.05f,gM102WorldBaseY+4.02f,z-0.08f},{x-1.05f,gM102WorldBaseY+4.02f,z-0.08f},
                     cam,M99_LEAVES,leafA);
-    m99TexturedQuad({x-0.08f,2.22f,z-1.03f},{x-0.08f,2.22f,z+1.03f},
-                    {x-0.08f,4.02f,z+1.03f},{x-0.08f,4.02f,z-1.03f},
+    m99TexturedQuad({x-0.08f,gM102WorldBaseY+2.22f,z-1.03f},{x-0.08f,gM102WorldBaseY+2.22f,z+1.03f},
+                    {x-0.08f,gM102WorldBaseY+4.02f,z+1.03f},{x-0.08f,gM102WorldBaseY+4.02f,z-1.03f},
                     cam,M99_LEAVES,leafB);
 }
 
@@ -615,22 +615,22 @@ static void m111StreetLamp(float x,float z,const Camera& cam) {
     prismPool({x,gM102WorldBaseY,z},0.075f,3.45f,8,cam,pole,metal,pole);
 
     // M111: slimmer curved-looking arm assembled from short segments.
-    boxPool({x+0.18f,3.30f,z},0.38f,0.08f,0.08f,cam,metal,pole,metal);
-    boxPool({x+0.39f,3.25f,z},0.22f,0.07f,0.08f,cam,metal,pole,metal);
-    prismPool({x+0.56f,3.20f,z},0.18f,0.18f,8,cam,metal,pole,metal);
-    boxPool({x+0.56f,3.13f,z},0.34f,0.08f,0.22f,cam,light,glow,light);
+    boxPool({x+0.18f,gM102WorldBaseY+3.30f,z},0.38f,0.08f,0.08f,cam,metal,pole,metal);
+    boxPool({x+0.39f,gM102WorldBaseY+3.25f,z},0.22f,0.07f,0.08f,cam,metal,pole,metal);
+    prismPool({x+0.56f,gM102WorldBaseY+3.20f,z},0.18f,0.18f,8,cam,metal,pole,metal);
+    boxPool({x+0.56f,gM102WorldBaseY+3.13f,z},0.34f,0.08f,0.22f,cam,light,glow,light);
 
     // Tiny warm halo geometry: cheap but reads much better on Vita screen.
-    prismPool({x+0.56f,3.03f,z},0.22f,0.05f,8,cam,glow,glow,glow);
+    prismPool({x+0.56f,gM102WorldBaseY+3.03f,z},0.22f,0.05f,8,cam,glow,glow,glow);
 }
 
 static void m98GrassClump(float x,float z,const Camera& cam,unsigned seed) {
     const unsigned g=static_cast<unsigned>(RGBA8(54,118+int(seed&12u),55,255));
     // Tiny crossed blades; cheap enough for a few per streamed cell.
     quadPool({x-0.05f,gM102WorldBaseY+0.01f,z},{x+0.05f,gM102WorldBaseY+0.01f,z},
-             {x+0.03f,0.34f,z},{x-0.03f,0.34f,z},cam,g);
+             {x+0.03f,gM102WorldBaseY+0.34f,z},{x-0.03f,gM102WorldBaseY+0.34f,z},cam,g);
     quadPool({x,gM102WorldBaseY+0.01f,z-0.05f},{x,gM102WorldBaseY+0.01f,z+0.05f},
-             {x,0.30f,z+0.03f},{x,0.30f,z-0.03f},cam,g);
+             {x,gM102WorldBaseY+0.30f,z+0.03f},{x,gM102WorldBaseY+0.30f,z-0.03f},cam,g);
 }
 
 static bool m98NearRoadX(int cx,float x) {
@@ -746,9 +746,45 @@ void drawM90Cell(int cx,int cz,const Camera& cam) {
     }
 }
 
+
+static void m112DrawOuterGroundCell(int cx,int cz,const Camera& cam) {
+    const float x0=cx*M90_CELL, z0=cz*M90_CELL;
+    const float x1=x0+M90_CELL, z1=z0+M90_CELL;
+    if(x1 < -M90_WORLD_HALF || x0 > M90_WORLD_HALF ||
+       z1 < -M90_WORLD_HALF || z0 > M90_WORLD_HALF) return;
+
+    const unsigned h=m90Hash(cx,cz);
+    const int region=m90Region(x0+32.0f,z0+32.0f);
+
+    // Plain low-cost far ground. Detailed texture/objects remain in inner 5x5.
+    groundTile(x0,z0,x1,z1,cam,m90GroundColor(region,h));
+
+    // Keep the far road silhouette readable.
+    const unsigned road=static_cast<unsigned>(RGBA8(46,47,49,255));
+    if((cx%4)==0) {
+        const float rx=x0+32.0f;
+        groundTile(rx-4.0f,z0,rx+4.0f,z1,cam,road);
+    }
+    if((cz%4)==0) {
+        const float rz=z0+32.0f;
+        groundTile(x0,rz-4.0f,x1,rz+4.0f,cam,road);
+    }
+}
+
 void drawM90FullMapStream(const Camera& cam) {
-    int ccx=static_cast<int>(std::floor(cam.position.x/M90_CELL));
-    int ccz=static_cast<int>(std::floor(cam.position.z/M90_CELL));
+    const int ccx=static_cast<int>(std::floor(cam.position.x/M90_CELL));
+    const int ccz=static_cast<int>(std::floor(cam.position.z/M90_CELL));
+
+    // M112 outer 7x7 ground ring prevents the blue clear-color void from
+    // appearing directly beside the streamed city, without doubling detail load.
+    for(int dz=-3;dz<=3;dz++) {
+        for(int dx=-3;dx<=3;dx++) {
+            if(std::abs(dx)<=M90_RADIUS && std::abs(dz)<=M90_RADIUS) continue;
+            m112DrawOuterGroundCell(ccx+dx,ccz+dz,cam);
+        }
+    }
+
+    // Detailed 5x5 stream remains exactly as before.
     for(int dz=-M90_RADIUS;dz<=M90_RADIUS;dz++)
         for(int dx=-M90_RADIUS;dx<=M90_RADIUS;dx++)
             drawM90Cell(ccx+dx,ccz+dz,cam);
@@ -1213,12 +1249,10 @@ static void m91DetailedBlock(const Camera& cam) {
 }
 
 static void m91Frame(const Camera& cam,const Player& player) {
-    // M110 lightweight pedestrian AI. Keep a fixed 30 FPS simulation step
-    // to avoid touching the physically confirmed input/game loop.
+    // M112: NPCs only. The old M91 detailed-block overlay is intentionally
+    // disabled because M90 is now the single authoritative city layout.
     m91UpdateNpcs(cam,player,1.0f/30.0f);
     m91DrawNpcs(cam);
-    if(std::fabs(cam.position.x)<90.0f && std::fabs(cam.position.z)<90.0f)
-        m91DetailedBlock(cam);
 }
 
 // M96 fixed map scenery -------------------------------------------------------
@@ -1685,7 +1719,8 @@ void VitaRenderer::draw(const Player& player,
     // M102: the current renderer world is a flat streamed prototype.
     // Capture Dash's real collision-ground spawn height once and anchor the
     // visual roads/buildings/trees/NPCs to that same fixed Y.
-    if(!gM102WorldBaseCaptured && !player.inVehicle) {
+    if(!gM102WorldBaseCaptured && !player.inVehicle &&
+       std::isfinite(player.position.y)) {
         gM102WorldBaseY=player.position.y;
         gM102WorldBaseCaptured=true;
     }
