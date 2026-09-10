@@ -17,6 +17,9 @@
 #include <psp2/io/fcntl.h>
 #include <psp2/io/stat.h>
 #include <cmath>
+#include <cstdio>
+#include <vita2d.h>
+#include <psp2/ctrl.h>
 
 static float distXZ(const Vec3& a,const Vec3& b) {
     float dx=a.x-b.x, dz=a.z-b.z;
@@ -51,6 +54,118 @@ static void makeCameraRelative(InputState& in,const Camera& camera) {
     in.moveY=rz*localRight + fz*localForward;
 }
 
+
+enum class M101MenuScreen { Main, Settings };
+
+static void m101DrawButton(vita2d_pgf* font,float x,float y,float w,float h,
+                           const char* text,bool selected) {
+    const unsigned bg=selected?RGBA8(78,88,105,235):RGBA8(20,24,31,220);
+    const unsigned border=selected?RGBA8(220,60,60,255):RGBA8(80,86,96,255);
+    vita2d_draw_rectangle(x,y,w,h,bg);
+    vita2d_draw_rectangle(x,y,w,2.0f,border);
+    vita2d_draw_rectangle(x,y+h-2.0f,w,2.0f,border);
+    if(font)
+        vita2d_pgf_draw_text(font,x+20.0f,y+34.0f,RGBA8(255,255,255,255),0.92f,text);
+}
+
+static bool m101RunStartMenu(GameSettings& settings,const char* settingsPath) {
+    vita2d_pgf* font=vita2d_load_default_pgf();
+    M101MenuScreen screen=M101MenuScreen::Main;
+    int selected=0;
+    unsigned prev=0;
+    bool running=true;
+    bool startGame=false;
+
+    while(running) {
+        SceCtrlData pad{};
+        sceCtrlPeekBufferPositive(0,&pad,1);
+        const unsigned pressed=pad.buttons & ~prev;
+
+        if(screen==M101MenuScreen::Main) {
+            if(pressed&SCE_CTRL_UP)   { selected=(selected+2)%3; }
+            if(pressed&SCE_CTRL_DOWN) { selected=(selected+1)%3; }
+
+            if(pressed&SCE_CTRL_CROSS) {
+                if(selected==0) {
+                    startGame=true;
+                    running=false;
+                } else if(selected==1) {
+                    screen=M101MenuScreen::Settings;
+                    selected=0;
+                } else {
+                    running=false;
+                    startGame=false;
+                }
+            }
+        } else {
+            if(pressed&SCE_CTRL_UP)   { selected=(selected+3)%4; }
+            if(pressed&SCE_CTRL_DOWN) { selected=(selected+1)%4; }
+
+            if(pressed&SCE_CTRL_LEFT || pressed&SCE_CTRL_RIGHT || pressed&SCE_CTRL_CROSS) {
+                if(selected==0) {
+                    settings.lookSensitivity += (pressed&SCE_CTRL_LEFT)?-0.1f:0.1f;
+                    if(settings.lookSensitivity<0.5f) settings.lookSensitivity=0.5f;
+                    if(settings.lookSensitivity>2.0f) settings.lookSensitivity=2.0f;
+                } else if(selected==1) {
+                    settings.invertCameraY=!settings.invertCameraY;
+                } else if(selected==2) {
+                    settings.firstPersonEnabled=!settings.firstPersonEnabled;
+                } else if(selected==3 && (pressed&SCE_CTRL_CROSS)) {
+                    settings.save(settingsPath);
+                    screen=M101MenuScreen::Main;
+                    selected=1;
+                }
+            }
+            if(pressed&SCE_CTRL_CIRCLE) {
+                settings.save(settingsPath);
+                screen=M101MenuScreen::Main;
+                selected=1;
+            }
+        }
+
+        prev=pad.buttons;
+
+        vita2d_start_drawing();
+        vita2d_clear_screen();
+
+        // Dark city-style start menu.
+        vita2d_draw_rectangle(0,0,960,544,RGBA8(8,12,18,255));
+        vita2d_draw_rectangle(0,0,960,7,RGBA8(195,43,43,255));
+        if(font) {
+            vita2d_pgf_draw_text(font,70,92,RGBA8(255,255,255,255),1.55f,"SIGHT CITY");
+            vita2d_pgf_draw_text(font,70,132,RGBA8(210,50,50,255),1.05f,"UNDERWORLD");
+        }
+
+        if(screen==M101MenuScreen::Main) {
+            m101DrawButton(font,70,205,330,52,"START GAME",selected==0);
+            m101DrawButton(font,70,270,330,52,"SETTINGS",selected==1);
+            m101DrawButton(font,70,335,330,52,"EXIT",selected==2);
+            if(font)
+                vita2d_pgf_draw_text(font,70,430,RGBA8(180,190,202,255),0.72f,
+                                     "D-Pad: Select   X: Confirm");
+        } else {
+            char line[96];
+            std::snprintf(line,sizeof(line),"LOOK SENSITIVITY  %.1f",settings.lookSensitivity);
+            m101DrawButton(font,70,190,430,48,line,selected==0);
+            std::snprintf(line,sizeof(line),"INVERT CAMERA Y  %s",settings.invertCameraY?"ON":"OFF");
+            m101DrawButton(font,70,247,430,48,line,selected==1);
+            std::snprintf(line,sizeof(line),"FIRST PERSON  %s",settings.firstPersonEnabled?"ON":"OFF");
+            m101DrawButton(font,70,304,430,48,line,selected==2);
+            m101DrawButton(font,70,361,430,48,"BACK",selected==3);
+            if(font)
+                vita2d_pgf_draw_text(font,70,450,RGBA8(180,190,202,255),0.70f,
+                                     "Left/Right or X: Change   O: Back");
+        }
+
+        vita2d_end_drawing();
+        vita2d_swap_buffers();
+        sceKernelDelayThread(16000);
+    }
+
+    if(font) vita2d_free_pgf(font);
+    return startGame;
+}
+
 int main() {
     VitaRenderer renderer;
     if(!renderer.init()) return -1;
@@ -58,7 +173,7 @@ int main() {
     VitaInput controls;
     VitaDevMenu devMenu; // Temporary dev menu.
     Player player;
-    player.position={0.28f,2.20f,7.92f}; // M97 X/Z spawn; Y snaps to real collision floor before play. // M80 spawn position
+    player.position={0.28f,2.20f,7.92f}; // M80 spawn position
     Vehicle car;
     car.position={4,0,4};
     Camera camera;
@@ -75,9 +190,22 @@ int main() {
     const char* settingsPath="ux0:data/SightCityUnderworld/settings.cfg";
     settings.load(settingsPath);
 
+    // M101 real start menu. START GAME no longer opens Settings.
+    // SETTINGS is a separate menu item.
+    if(!m101RunStartMenu(settings,settingsPath)) {
+        renderer.shutdown();
+        sceKernelExitProcess(0);
+        return 0;
+    }
+
+    // M101: build collision data first, then put Dash exactly on the real floor.
+    environment.stream(player.position,3);
+    sightMap.stream(player.position,3);
+    collisions.rebuild(environment,sightMap);
+    player.position.y=collisions.groundHeight(player.position.x,player.position.z,environment);
+    player.velocity={0.0f,0.0f,0.0f};
+
     const float dt=1.0f/30.0f; // Vita target: stable 30 fps.
-    bool m96InitialGroundSnap=false;
-    bool m96WasFlyMode=false;
     while(!controls.quitRequested()) {
         // Temporary developer menu. SELECT opens/closes it.
         if(devMenu.update(player,car,wanted,environment,collisions)) {
@@ -127,19 +255,6 @@ int main() {
         environment.stream(preFocus,3);
         sightMap.stream(preFocus,3);
         collisions.rebuild(environment,sightMap);
-
-        // M96: put Dash on the REAL collision floor on first playable frame.
-        // Also snap safely back to the floor when Fly Mode is turned OFF.
-        const bool m96FlyNow=devMenu.flyMode();
-        if(!player.inVehicle && !m96FlyNow &&
-           (!m96InitialGroundSnap || m96WasFlyMode)) {
-            player.position.y=collisions.groundHeight(
-                player.position.x,player.position.z,environment);
-            player.velocity={0.0f,0.0f,0.0f};
-            m96InitialGroundSnap=true;
-        }
-        m96WasFlyMode=m96FlyNow;
-
         if(!devMenu.flyMode()) {
             if(!player.inVehicle) {
                 // M84: movement uses the actual camera forward/right vectors.

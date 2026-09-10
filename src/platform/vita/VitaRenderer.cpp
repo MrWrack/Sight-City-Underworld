@@ -4,7 +4,10 @@
 #include "platform/vita/DevDebugState.h"
 #include <cstdio>
 
+#include "platform/vita/M100WorldAtlas.h"
 namespace {
+
+static vita2d_texture* gM100WorldAtlas = nullptr;
 
 constexpr float W = 960.0f;
 constexpr float H = 544.0f;
@@ -87,6 +90,97 @@ void quadPool(const Vec3& a, const Vec3& b,
 
     triPool(pa, pb, pc, color);
     triPool(pa, pc, pd, color);
+}
+
+enum M99Tile {
+    M99_GRASS=0, M99_ASPHALT=1, M99_CONCRETE=2, M99_DIRT=3,
+    M99_BRICK=4, M99_WALL=5, M99_WINDOWS=6, M99_BARK=7,
+    M99_LEAVES=8, M99_SAND=9, M99_ROCK=10, M99_METAL=11,
+    M99_SIDEWALK=12, M99_ROOF=13, M99_DRY_GRASS=14, M99_WHITE=15
+};
+
+static void m99TileUV(int tile,float& u0,float& v0,float& u1,float& v1) {
+    const int tx=tile&3;
+    const int ty=(tile>>2)&3;
+    const float step=0.25f;
+    // Tiny inset avoids sampling a neighbor tile with linear filtering.
+    const float inset=0.0012f;
+    u0=tx*step+inset; v0=ty*step+inset;
+    u1=(tx+1)*step-inset; v1=(ty+1)*step-inset;
+}
+
+static void m99TexturedQuad(const Vec3& a,const Vec3& b,
+                            const Vec3& c,const Vec3& d,
+                            const Camera& cam,int tile,
+                            unsigned fallbackColor) {
+    if(!gM100WorldAtlas) {
+        quadPool(a,b,c,d,cam,fallbackColor);
+        return;
+    }
+
+    const P2 pa=projectSafe(a,cam);
+    const P2 pb=projectSafe(b,cam);
+    const P2 pc=projectSafe(c,cam);
+    const P2 pd=projectSafe(d,cam);
+    if(!pa.ok || !pb.ok || !pc.ok || !pd.ok) return;
+
+    float u0,v0,u1,v1;
+    m99TileUV(tile,u0,v0,u1,v1);
+
+    // GPU-readable Vita2D pool memory. Never stack-backed vertices.
+    vita2d_texture_vertex* v =
+        (vita2d_texture_vertex*)vita2d_pool_memalign(
+            6*sizeof(vita2d_texture_vertex),
+            sizeof(vita2d_texture_vertex));
+    if(!v) return;
+
+    // Triangle 1
+    v[0].x=pa.x; v[0].y=pa.y; v[0].z=0.5f; v[0].u=u0; v[0].v=v0;
+    v[1].x=pb.x; v[1].y=pb.y; v[1].z=0.5f; v[1].u=u1; v[1].v=v0;
+    v[2].x=pc.x; v[2].y=pc.y; v[2].z=0.5f; v[2].u=u1; v[2].v=v1;
+    // Triangle 2
+    v[3].x=pa.x; v[3].y=pa.y; v[3].z=0.5f; v[3].u=u0; v[3].v=v0;
+    v[4].x=pc.x; v[4].y=pc.y; v[4].z=0.5f; v[4].u=u1; v[4].v=v1;
+    v[5].x=pd.x; v[5].y=pd.y; v[5].z=0.5f; v[5].u=u0; v[5].v=v1;
+
+    vita2d_draw_array_textured(
+        gM100WorldAtlas,SCE_GXM_PRIMITIVE_TRIANGLES,v,6,
+        static_cast<unsigned>(RGBA8(255,255,255,255)));
+}
+
+static void m99GroundTile(float x0,float z0,float x1,float z1,
+                          const Camera& cam,int tile,unsigned fallbackColor) {
+    m99TexturedQuad({x0,0.002f,z0},{x1,0.002f,z0},
+                    {x1,0.002f,z1},{x0,0.002f,z1},
+                    cam,tile,fallbackColor);
+}
+
+static int m99GroundTileForRegion(int region) {
+    if(region==1) return M99_SAND;
+    if(region==2) return M99_DRY_GRASS;
+    if(region==6) return M99_CONCRETE;
+    return M99_GRASS;
+}
+
+static void m99BuildingTextureOverlay(const Vec3& c,float sx,float sy,float sz,
+                                      const Camera& cam,unsigned seed) {
+    const float x0=c.x-sx*.5f, x1=c.x+sx*.5f;
+    const float y0=c.y+0.05f, y1=c.y+sy-0.08f;
+    const float z0=c.z-sz*.5f, z1=c.z+sz*.5f;
+    const float e=0.016f;
+    const int tile=(seed&1u)?M99_BRICK:M99_WALL;
+    const unsigned fallback=static_cast<unsigned>(RGBA8(155,145,138,255));
+
+    // All four walls now receive texture instead of only front/back.
+    m99TexturedQuad({x0,y0,z0-e},{x1,y0,z0-e},{x1,y1,z0-e},{x0,y1,z0-e},cam,tile,fallback);
+    m99TexturedQuad({x1,y0,z1+e},{x0,y0,z1+e},{x0,y1,z1+e},{x1,y1,z1+e},cam,tile,fallback);
+    m99TexturedQuad({x0-e,y0,z1},{x0-e,y0,z0},{x0-e,y1,z0},{x0-e,y1,z1},cam,tile,fallback);
+    m99TexturedQuad({x1+e,y0,z0},{x1+e,y0,z1},{x1+e,y1,z1},{x1+e,y1,z0},cam,tile,fallback);
+
+    // Roof texture softens the plain flat-color roof.
+    m99TexturedQuad({x0,c.y+sy+0.012f,z0},{x1,c.y+sy+0.012f,z0},
+                    {x1,c.y+sy+0.012f,z1},{x0,c.y+sy+0.012f,z1},
+                    cam,M99_ROOF,static_cast<unsigned>(RGBA8(105,108,110,255)));
 }
 
 void boxPool(const Vec3& c,
@@ -213,6 +307,8 @@ void cityBuilding(const Vec3& c,float sx,float sy,float sz,
                   const Camera& cam,unsigned front,unsigned side,unsigned top) {
     // M92: beveled / faceted building replaces the old plain box silhouette.
     bevelBuilding(c,sx,sy,sz,cam,front,side,top);
+    m99BuildingTextureOverlay(c,sx,sy,sz,cam,
+                              static_cast<unsigned>(std::fabs(c.x*13.0f+c.z*7.0f)));
     m92WindowsRoundedFacade(c,sx,sy,sz,cam);
 }
 
@@ -445,6 +541,77 @@ static unsigned m90GroundColor(int region,unsigned h) {
     }
 }
 
+
+// M98 world-detail helpers ---------------------------------------------------
+static void m98Tree(float x,float z,const Camera& cam,unsigned seed) {
+    const unsigned trunkA=static_cast<unsigned>(RGBA8(89,62,42,255));
+    const unsigned trunkB=static_cast<unsigned>(RGBA8(65,44,30,255));
+    const unsigned leafA=static_cast<unsigned>(RGBA8(40+(seed&13u),102,46,255));
+    const unsigned leafB=static_cast<unsigned>(RGBA8(28,78+((seed>>4)&15u),35,255));
+    const unsigned leafC=static_cast<unsigned>(RGBA8(58,121,53,255));
+
+    // Thin trunk with two branch stubs.
+    prismPool({x,0.0f,z},0.16f,3.05f,10,cam,trunkA,trunkB,trunkA);
+    prismPool({x-0.22f,1.90f,z},0.07f,0.72f,8,cam,trunkA,trunkB,trunkA);
+    prismPool({x+0.24f,2.02f,z-0.08f},0.07f,0.64f,8,cam,trunkA,trunkB,trunkA);
+
+    // Irregular layered crown: deliberately not one cube/one sphere.
+    prismPool({x,2.25f,z},0.74f,1.15f,12,cam,leafA,leafB,leafC);
+    prismPool({x-0.62f,2.48f,z+0.18f},0.56f,0.88f,10,cam,leafB,leafA,leafC);
+    prismPool({x+0.60f,2.55f,z-0.12f},0.58f,0.92f,10,cam,leafC,leafB,leafA);
+    prismPool({x-0.18f,3.10f,z-0.34f},0.55f,0.88f,12,cam,leafA,leafC,leafB);
+    prismPool({x+0.24f,3.28f,z+0.30f},0.48f,0.74f,10,cam,leafC,leafA,leafB);
+
+    // Bark and foliage texture overlays.
+    m99TexturedQuad({x-0.13f,0.0f,z-0.18f},{x+0.13f,0.0f,z-0.18f},
+                    {x+0.13f,3.02f,z-0.18f},{x-0.13f,3.02f,z-0.18f},
+                    cam,M99_BARK,trunkA);
+    m99TexturedQuad({x-1.05f,2.22f,z-0.08f},{x+1.05f,2.22f,z-0.08f},
+                    {x+1.05f,4.02f,z-0.08f},{x-1.05f,4.02f,z-0.08f},
+                    cam,M99_LEAVES,leafA);
+    m99TexturedQuad({x-0.08f,2.22f,z-1.03f},{x-0.08f,2.22f,z+1.03f},
+                    {x-0.08f,4.02f,z+1.03f},{x-0.08f,4.02f,z-1.03f},
+                    cam,M99_LEAVES,leafB);
+}
+
+static void m98StreetLamp(float x,float z,const Camera& cam) {
+    const unsigned pole=static_cast<unsigned>(RGBA8(54,58,62,255));
+    const unsigned metal=static_cast<unsigned>(RGBA8(73,77,82,255));
+    const unsigned light=static_cast<unsigned>(RGBA8(255,224,142,255));
+    const unsigned glow=static_cast<unsigned>(RGBA8(255,238,176,210));
+
+    // Slim 8-sided pole instead of a blocky column.
+    prismPool({x,0.0f,z},0.075f,3.45f,8,cam,pole,metal,pole);
+
+    // Small horizontal arm and tapered-looking lamp head.
+    boxPool({x+0.28f,3.30f,z},0.62f,0.10f,0.10f,cam,metal,pole,metal);
+    prismPool({x+0.56f,3.20f,z},0.18f,0.18f,8,cam,metal,pole,metal);
+    boxPool({x+0.56f,3.13f,z},0.34f,0.08f,0.22f,cam,light,glow,light);
+
+    // Tiny warm halo geometry: cheap but reads much better on Vita screen.
+    prismPool({x+0.56f,3.03f,z},0.22f,0.05f,8,cam,glow,glow,glow);
+}
+
+static void m98GrassClump(float x,float z,const Camera& cam,unsigned seed) {
+    const unsigned g=static_cast<unsigned>(RGBA8(54,118+int(seed&12u),55,255));
+    // Tiny crossed blades; cheap enough for a few per streamed cell.
+    quadPool({x-0.05f,0.01f,z},{x+0.05f,0.01f,z},
+             {x+0.03f,0.34f,z},{x-0.03f,0.34f,z},cam,g);
+    quadPool({x,0.01f,z-0.05f},{x,0.01f,z+0.05f},
+             {x,0.30f,z+0.03f},{x,0.30f,z-0.03f},cam,g);
+}
+
+static bool m98NearRoadX(int cx,float x) {
+    if((cx%4)!=0) return false;
+    const float rx=float(cx)*M90_CELL+32.0f;
+    return std::fabs(x-rx)<8.0f;
+}
+static bool m98NearRoadZ(int cz,float z) {
+    if((cz%4)!=0) return false;
+    const float rz=float(cz)*M90_CELL+32.0f;
+    return std::fabs(z-rz)<8.0f;
+}
+
 void drawM90Cell(int cx,int cz,const Camera& cam) {
     const float x0=cx*M90_CELL, z0=cz*M90_CELL;
     const float x1=x0+M90_CELL, z1=z0+M90_CELL;
@@ -453,7 +620,7 @@ void drawM90Cell(int cx,int cz,const Camera& cam) {
 
     const unsigned h=m90Hash(cx,cz);
     const int region=m90Region(x0+32.0f,z0+32.0f);
-    groundTile(x0,z0,x1,z1,cam,m90GroundColor(region,h));
+    m99GroundTile(x0,z0,x1,z1,cam,m99GroundTileForRegion(region),m90GroundColor(region,h));
 
     // Continuous sparse road grid across the entire map.
     const unsigned road=static_cast<unsigned>(RGBA8(46,47,49,255));
@@ -461,47 +628,89 @@ void drawM90Cell(int cx,int cz,const Camera& cam) {
     const unsigned line=static_cast<unsigned>(RGBA8(219,180,56,255));
     if((cx%4)==0) {
         float rx=x0+32.0f;
-        groundTile(rx-4.0f,z0,rx+4.0f,z1,cam,road);
-        groundTile(rx-5.0f,z0,rx-4.1f,z1,cam,curb);
-        groundTile(rx+4.1f,z0,rx+5.0f,z1,cam,curb);
+        m99GroundTile(rx-4.0f,z0,rx+4.0f,z1,cam,M99_ASPHALT,road);
+        m99GroundTile(rx-5.0f,z0,rx-4.1f,z1,cam,M99_CONCRETE,curb);
+        m99GroundTile(rx+4.1f,z0,rx+5.0f,z1,cam,M99_CONCRETE,curb);
+        m99GroundTile(rx-7.0f,z0,rx-5.1f,z1,cam,M99_SIDEWALK,curb);
+        m99GroundTile(rx+5.1f,z0,rx+7.0f,z1,cam,M99_SIDEWALK,curb);
         for(float zz=z0+4.0f;zz<z1;zz+=16.0f)
             groundTile(rx-0.35f,zz,rx+0.35f,zz+7.0f,cam,line);
     }
     if((cz%4)==0) {
         float rz=z0+32.0f;
-        groundTile(x0,rz-4.0f,x1,rz+4.0f,cam,road);
-        groundTile(x0,rz-5.0f,x1,rz-4.1f,cam,curb);
-        groundTile(x0,rz+4.1f,x1,rz+5.0f,cam,curb);
+        m99GroundTile(x0,rz-4.0f,x1,rz+4.0f,cam,M99_ASPHALT,road);
+        m99GroundTile(x0,rz-5.0f,x1,rz-4.1f,cam,M99_CONCRETE,curb);
+        m99GroundTile(x0,rz+4.1f,x1,rz+5.0f,cam,M99_CONCRETE,curb);
+        m99GroundTile(x0,rz-7.0f,x1,rz-5.1f,cam,M99_SIDEWALK,curb);
+        m99GroundTile(x0,rz+5.1f,x1,rz+7.0f,cam,M99_SIDEWALK,curb);
         for(float xx=x0+4.0f;xx<x1;xx+=16.0f)
             groundTile(xx,rz-0.35f,xx+7.0f,rz+0.35f,cam,line);
     }
 
-    // Region density: fewer buildings in mountains/desert/farmland, more in city.
+    // M98 stable building lots. One layout system only; no duplicate M89 spawn block.
     unsigned density=0;
     if(region==5) density=2;
     else if(region==4 || region==3) density=((h>>4)&1u);
     else density=((h&7u)==0u)?1u:0u;
 
-    for(unsigned i=0;i<density;i++) {
-        unsigned q=m90Hash(cx*13+int(i)*17,cz*19+int(i)*23);
-        float bx=x0+11.0f+float(q%41u);
-        float bz=z0+11.0f+float((q>>8)%41u);
-        float sx=8.0f+float((q>>16)%5u);
-        float sz=8.0f+float((q>>20)%5u);
-        float sy=(region==5?8.0f:5.0f)+float((q>>24)%(region==5?20u:8u));
-        if((cx%4)==0 && bx>x0+21.0f && bx<x0+43.0f) bx=x0+12.0f;
-        if((cz%4)==0 && bz>z0+21.0f && bz<z0+43.0f) bz=z0+12.0f;
-        const unsigned c1=static_cast<unsigned>(RGBA8(128+(q&25u),126+((q>>5)&25u),121+((q>>10)&25u),255));
-        const unsigned c2=static_cast<unsigned>(RGBA8(89+(q&20u),89+((q>>5)&20u),89+((q>>10)&20u),255));
-        const unsigned c3=static_cast<unsigned>(RGBA8(158+(q&20u),155+((q>>5)&20u),151+((q>>10)&20u),255));
+    static const float lotX[4]={12.0f,52.0f,12.0f,52.0f};
+    static const float lotZ[4]={12.0f,12.0f,52.0f,52.0f};
+
+    M95PlacedBuilding placed[4];
+    int placedCount=0;
+
+    for(unsigned i=0;i<density && i<4u;i++) {
+        const unsigned q=m90Hash(cx*31+int(i)*17,cz*37+int(i)*23);
+        float sx=8.0f+float((q>>16)%4u);
+        float sz=8.0f+float((q>>20)%4u);
+        float sy=(region==5?8.0f:5.0f)+float((q>>24)%(region==5?18u:7u));
+
+        // Pick a fixed lot from cell hash. Very small deterministic jitter only.
+        const int li=int((q+i)%4u);
+        float bx=x0+lotX[li]+(float((q>>5)%5u)-2.0f)*0.45f;
+        float bz=z0+lotZ[li]+(float((q>>9)%5u)-2.0f)*0.45f;
+
+        // Never put a building footprint on the cell's road corridor.
+        if(m98NearRoadX(cx,bx)) bx = (bx < x0+32.0f) ? x0+12.0f : x0+52.0f;
+        if(m98NearRoadZ(cz,bz)) bz = (bz < z0+32.0f) ? z0+12.0f : z0+52.0f;
+
+        if(!m95CanPlace(placed,placedCount,bx,bz,sx,sz)) continue;
+        placed[placedCount++]={bx,bz,sx,sz};
+
+        const unsigned c1=static_cast<unsigned>(RGBA8(132+(q&23u),130+((q>>5)&23u),126+((q>>10)&23u),255));
+        const unsigned c2=static_cast<unsigned>(RGBA8(91+(q&18u),91+((q>>5)&18u),91+((q>>10)&18u),255));
+        const unsigned c3=static_cast<unsigned>(RGBA8(165+(q&18u),162+((q>>5)&18u),158+((q>>10)&18u),255));
         cityBuilding({bx,0.0f,bz},sx,sy,sz,cam,c1,c2,c3);
     }
 
-    // Sparse geometry-only vegetation.
-    if((h&3u)==0u && region!=1) {
-        float tx=x0+8.0f+float((h>>9)%48u);
-        float tz=z0+8.0f+float((h>>15)%48u);
-        treeSimple(tx,tz,cam);
+    // Better but capped vegetation / grass detail.
+    if(region!=1) {
+        for(unsigned i=0;i<3u;i++) {
+            const unsigned q=m90Hash(cx*73+int(i)*11,cz*79+int(i)*13);
+            float gx=x0+7.0f+float(q%50u);
+            float gz=z0+7.0f+float((q>>8)%50u);
+            if(!m98NearRoadX(cx,gx) && !m98NearRoadZ(cz,gz))
+                m98GrassClump(gx,gz,cam,q);
+        }
+
+        if((h&3u)==0u) {
+            float tx=x0+10.0f+float((h>>9)%44u);
+            float tz=z0+10.0f+float((h>>15)%44u);
+            if(!m98NearRoadX(cx,tx) && !m98NearRoadZ(cz,tz))
+                m98Tree(tx,tz,cam,h);
+        }
+    }
+
+    // Lamps follow roads at fixed world positions.
+    if((cx%4)==0) {
+        const float rx=x0+32.0f;
+        m98StreetLamp(rx-6.0f,z0+14.0f,cam);
+        m98StreetLamp(rx+6.0f,z0+50.0f,cam);
+    }
+    if((cz%4)==0) {
+        const float rz=z0+32.0f;
+        m98StreetLamp(x0+14.0f,rz-6.0f,cam);
+        m98StreetLamp(x0+50.0f,rz+6.0f,cam);
     }
 }
 
@@ -738,6 +947,9 @@ struct M91Npc {
     Vec3 p;
     Vec3 goal;
     float speed;
+    float heading;
+    float walkPhase;
+    float idleTimer;
     unsigned seed;
 };
 
@@ -750,13 +962,17 @@ static float m91Dist2XZ(const Vec3& a,const Vec3& b) {
 }
 
 static void m91InitNpcs(const Camera& cam) {
+    (void)cam;
     for(int i=0;i<12;i++) {
         const float a=float(i)*0.5235987f;
-        gM91Npcs[i].p={cam.position.x+std::cos(a)*(18.0f+float(i%4)*5.0f),0.0f,
-                       cam.position.z+std::sin(a)*(18.0f+float(i%4)*5.0f)};
+        gM91Npcs[i].p={std::cos(a)*(18.0f+float(i%4)*5.0f),0.0f,
+                       std::sin(a)*(18.0f+float(i%4)*5.0f)};
         gM91Npcs[i].goal={gM91Npcs[i].p.x+float((i%3)-1)*18.0f,0.0f,
                           gM91Npcs[i].p.z+float(((i+1)%3)-1)*18.0f};
-        gM91Npcs[i].speed=0.75f+0.08f*float(i%5);
+        gM91Npcs[i].speed=0.70f+0.09f*float(i%5);
+        gM91Npcs[i].heading=a;
+        gM91Npcs[i].walkPhase=float(i)*0.45f;
+        gM91Npcs[i].idleTimer=0.0f;
         gM91Npcs[i].seed=0x1234u+unsigned(i)*977u;
     }
     gM91NpcInit=true;
@@ -769,6 +985,12 @@ static void m91UpdateNpcs(const Camera& cam,float dt) {
 
     for(int i=0;i<12;i++) {
         M91Npc& n=gM91Npcs[i];
+
+        if(n.idleTimer>0.0f) {
+            n.idleTimer-=dt;
+            continue;
+        }
+
         float dx=n.goal.x-n.p.x, dz=n.goal.z-n.p.z;
         float d2=dx*dx+dz*dz;
         if(d2<2.0f) {
@@ -777,34 +999,43 @@ static void m91UpdateNpcs(const Camera& cam,float dt) {
             n.seed=n.seed*1664525u+1013904223u;
             float oz=float(int((n.seed>>8)&31u)-15);
             n.goal={n.p.x+ox,0.0f,n.p.z+oz};
+            if((n.seed&3u)==0u) n.idleTimer=0.7f+float((n.seed>>5)&7u)*0.15f;
         } else {
             float inv=1.0f/std::sqrt(d2);
+            n.heading=std::atan2(dx,dz);
             n.p.x+=dx*inv*n.speed*dt;
             n.p.z+=dz*inv*n.speed*dt;
-        }
-
-        // Recycle NPCs that become too distant, keeping CPU/render cost bounded.
-        if(m91Dist2XZ(n.p,cam.position)>95.0f*95.0f) {
-            n.p={cam.position.x+float((i%4)-2)*8.0f,0.0f,
-                 cam.position.z+18.0f+float(i/4)*7.0f};
-            n.goal={n.p.x+12.0f,0.0f,n.p.z};
+            n.walkPhase+=dt*(4.0f+n.speed*2.0f);
         }
     }
 }
 
 static void m91DrawNpc(const M91Npc& n,const Camera& cam) {
-    const unsigned jeans=static_cast<unsigned>(RGBA8(48,60,78,255));
-    const unsigned shirt=static_cast<unsigned>(RGBA8(116,52,50,255));
-    const unsigned skin=static_cast<unsigned>(RGBA8(190,151,118,255));
-    const unsigned hair=static_cast<unsigned>(RGBA8(48,39,34,255));
+    const unsigned jeans=static_cast<unsigned>(RGBA8(45+int(n.seed&15u),55,75,255));
+    const unsigned shirt=static_cast<unsigned>(RGBA8(85+int((n.seed>>4)&55u),50+int((n.seed>>10)&35u),65+int((n.seed>>15)&30u),255));
+    const unsigned skin=static_cast<unsigned>(RGBA8(188,149,116,255));
+    const unsigned hair=static_cast<unsigned>(RGBA8(45,37,33,255));
+    const unsigned shoes=static_cast<unsigned>(RGBA8(28,29,31,255));
 
-    // Slim limbs + faceted torso/head give a much less block-like silhouette.
-    prismPool({n.p.x-0.14f,n.p.y,n.p.z},0.11f,0.78f,6,cam,jeans,jeans,jeans);
-    prismPool({n.p.x+0.14f,n.p.y,n.p.z},0.11f,0.78f,6,cam,jeans,jeans,jeans);
-    prismPool({n.p.x,n.p.y+0.72f,n.p.z},0.36f,0.82f,8,cam,shirt,shirt,shirt);
-    prismPool({n.p.x-0.39f,n.p.y+0.78f,n.p.z},0.075f,0.68f,6,cam,skin,skin,skin);
-    prismPool({n.p.x+0.39f,n.p.y+0.78f,n.p.z},0.075f,0.68f,6,cam,skin,skin,skin);
-    prismPool({n.p.x,n.p.y+1.48f,n.p.z},0.25f,0.42f,8,cam,skin,skin,hair);
+    const float swing=std::sin(n.walkPhase)*0.10f;
+    const float sn=std::sin(n.heading), cs=std::cos(n.heading);
+
+    auto wp=[&](float side,float up,float fwd)->Vec3 {
+        return {n.p.x+cs*side+sn*fwd,n.p.y+up,n.p.z-sn*side+cs*fwd};
+    };
+
+    // Rounded low-poly body: no cube torso/head.
+    prismPool(wp(-0.15f,0.00f, swing),0.12f,0.76f,8,cam,jeans,jeans,jeans);
+    prismPool(wp( 0.15f,0.00f,-swing),0.12f,0.76f,8,cam,jeans,jeans,jeans);
+    prismPool(wp(-0.15f,0.00f, swing+0.07f),0.15f,0.16f,8,cam,shoes,shoes,shoes);
+    prismPool(wp( 0.15f,0.00f,-swing+0.07f),0.15f,0.16f,8,cam,shoes,shoes,shoes);
+
+    prismPool(wp(0.0f,0.72f,0.0f),0.34f,0.76f,10,cam,shirt,shirt,shirt);
+    prismPool(wp(-0.39f,0.79f,-swing),0.075f,0.64f,8,cam,skin,skin,skin);
+    prismPool(wp( 0.39f,0.79f, swing),0.075f,0.64f,8,cam,skin,skin,skin);
+
+    prismPool(wp(0.0f,1.46f,0.0f),0.23f,0.42f,12,cam,skin,skin,skin);
+    prismPool(wp(0.0f,1.80f,-0.01f),0.235f,0.08f,12,cam,hair,hair,hair);
 }
 
 static void m91DrawNpcs(const Camera& cam) {
@@ -919,59 +1150,51 @@ static void m97DrawDash(const Player& player,const Camera& cam) {
     const float a=player.heading;
     const float sn=std::sin(a), cs=std::cos(a);
 
-    const unsigned pants=static_cast<unsigned>(RGBA8(35,39,46,255));
-    const unsigned shoes=static_cast<unsigned>(RGBA8(20,21,24,255));
-    const unsigned jacket=static_cast<unsigned>(RGBA8(50,58,68,255));
-    const unsigned shirt=static_cast<unsigned>(RGBA8(175,48,48,255));
-    const unsigned skin=static_cast<unsigned>(RGBA8(188,143,112,255));
-    const unsigned hair=static_cast<unsigned>(RGBA8(38,31,28,255));
+    const float speed=std::sqrt(player.velocity.x*player.velocity.x+
+                                player.velocity.z*player.velocity.z);
+    static float walkPhase=0.0f;
+    if(speed>0.15f) walkPhase += 0.16f + std::min(speed,6.5f)*0.025f;
+    const float swing=(speed>0.15f)?std::sin(walkPhase)*0.12f:0.0f;
 
-    auto part=[&](float side,float up,float forward,float sx,float sy,float sz,
-                  unsigned front,unsigned sideCol,unsigned top) {
-        Vec3 c{x + cs*side + sn*forward,
-               y + up,
-               z - sn*side + cs*forward};
-        bevelBuilding(c,sx,sy,sz,cam,front,sideCol,top);
+    const unsigned pants=static_cast<unsigned>(RGBA8(34,39,48,255));
+    const unsigned shoes=static_cast<unsigned>(RGBA8(20,21,24,255));
+    const unsigned jacket=static_cast<unsigned>(RGBA8(48,57,70,255));
+    const unsigned shirt=static_cast<unsigned>(RGBA8(171,47,47,255));
+    const unsigned skin=static_cast<unsigned>(RGBA8(188,143,112,255));
+    const unsigned hair=static_cast<unsigned>(RGBA8(37,31,29,255));
+
+    auto wp=[&](float side,float up,float fwd)->Vec3 {
+        return {x+cs*side+sn*fwd,y+up,z-sn*side+cs*fwd};
     };
 
-    // Shoes + legs: bottom visually reaches the collision floor.
-    part(-0.18f,0.10f, 0.04f,0.22f,0.20f,0.42f,shoes,shoes,shoes);
-    part( 0.18f,0.10f, 0.04f,0.22f,0.20f,0.42f,shoes,shoes,shoes);
-    part(-0.18f,0.62f, 0.00f,0.27f,0.88f,0.30f,pants,pants,pants);
-    part( 0.18f,0.62f, 0.00f,0.27f,0.88f,0.30f,pants,pants,pants);
+    // More human silhouette: rounded 8/10/12-sided components.
+    prismPool(wp(-0.17f,0.00f, swing),0.13f,0.86f,8,cam,pants,pants,pants);
+    prismPool(wp( 0.17f,0.00f,-swing),0.13f,0.86f,8,cam,pants,pants,pants);
+    prismPool(wp(-0.17f,0.00f, swing+0.09f),0.16f,0.18f,8,cam,shoes,shoes,shoes);
+    prismPool(wp( 0.17f,0.00f,-swing+0.09f),0.16f,0.18f,8,cam,shoes,shoes,shoes);
 
-    // Torso and jacket.
-    part(0.0f,1.33f,0.0f,0.72f,0.72f,0.38f,jacket,
-         static_cast<unsigned>(RGBA8(40,47,57,255)),jacket);
-    part(0.0f,1.35f,0.205f,0.28f,0.52f,0.04f,shirt,shirt,shirt);
+    prismPool(wp(0.0f,0.82f,0.0f),0.38f,0.78f,10,cam,jacket,jacket,jacket);
+    // red shirt visible in front
+    m99TexturedQuad(wp(-0.15f,0.96f,0.37f),wp(0.15f,0.96f,0.37f),
+                    wp(0.15f,1.42f,0.37f),wp(-0.15f,1.42f,0.37f),
+                    cam,M99_WALL,shirt);
 
-    // Arms.
-    part(-0.48f,1.30f,0.0f,0.18f,0.72f,0.20f,jacket,jacket,jacket);
-    part( 0.48f,1.30f,0.0f,0.18f,0.72f,0.20f,jacket,jacket,jacket);
+    prismPool(wp(-0.46f,0.88f,-swing),0.085f,0.70f,8,cam,jacket,jacket,jacket);
+    prismPool(wp( 0.46f,0.88f, swing),0.085f,0.70f,8,cam,jacket,jacket,jacket);
+    prismPool(wp(-0.46f,0.86f,-swing),0.09f,0.13f,8,cam,skin,skin,skin);
+    prismPool(wp( 0.46f,0.86f, swing),0.09f,0.13f,8,cam,skin,skin,skin);
 
-    // Head/hair.
-    part(0.0f,1.91f,0.0f,0.43f,0.46f,0.40f,skin,
-         static_cast<unsigned>(RGBA8(160,116,90,255)),skin);
-    part(0.0f,2.15f,-0.01f,0.45f,0.10f,0.42f,hair,hair,hair);
+    prismPool(wp(0.0f,1.55f,0.0f),0.25f,0.46f,12,cam,skin,skin,skin);
+    prismPool(wp(0.0f,1.92f,-0.01f),0.26f,0.09f,12,cam,hair,hair,hair);
 }
 
 void drawTestCity(const Camera& cam) {
     // Full 120 x 120 km world through streaming.
     drawM90FullMapStream(cam);
 
-    // Keep the physically-tested M89 downtown block around the spawn.
-    if(std::fabs(cam.position.x)<220.0f && std::fabs(cam.position.z)<220.0f) {
-        drawExpandedGround(cam);
-        roadX(7.0f,cam);
-        roadX(52.0f,cam);
-        roadZ(-22.0f,cam);
-        roadZ(22.0f,cam);
-        drawExpandedBuildings(cam);
-        drawStreetDetails(cam);
-        drawOuterRoadsAndDetails(cam);
-        drawOuterDistrictBuildings(cam);
-    }
-
+    // M98: the old M89 block is NOT drawn on top of M90 anymore.
+    // It caused duplicated roads/buildings and visible spawn/overlap glitches.
+    // M90 is now the single world-layout source around the player.
     m91Frame(cam);
 
     // M96: REMOVED camera-following terrain/landmarks.
@@ -1054,13 +1277,26 @@ bool VitaRenderer::init() {
     if (vita2d_init() < 0) return false;
     gM94DebugFont = vita2d_load_default_pgf();
 
-    // Solid clear color only. No textures/images.
+    // M100: load the 512x512 atlas once. Embedded PNG avoids VPK path issues.
+    gM100WorldAtlas = vita2d_load_PNG_buffer(kM100WorldAtlasPng);
+    if(gM100WorldAtlas) {
+        vita2d_texture_set_filters(
+            gM100WorldAtlas,
+            SCE_GXM_TEXTURE_FILTER_LINEAR,
+            SCE_GXM_TEXTURE_FILTER_LINEAR);
+    }
+
     vita2d_set_clear_color(static_cast<unsigned>(RGBA8(110, 175, 225, 255)));
     return true;
 }
 
 void VitaRenderer::shutdown() {
+    // vita2d_fini() finishes queued GPU work before the texture is released.
     vita2d_fini();
+    if(gM100WorldAtlas) {
+        vita2d_free_texture(gM100WorldAtlas);
+        gM100WorldAtlas=nullptr;
+    }
 }
 
 
