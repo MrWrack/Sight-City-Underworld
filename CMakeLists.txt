@@ -63,6 +63,8 @@ if(BUILD_VITA)
         ${CORE_SOURCES}
         src/platform/vita/VitaInput.cpp
         src/platform/vita/VitaRenderer.cpp
+        src/platform/vita/VitaDevMenu.cpp
+        src/platform/vita/DevDebugState.cpp
         src/platform/vita/main_vita.cpp
     )
     target_include_directories(city_limits_vita PRIVATE src)
